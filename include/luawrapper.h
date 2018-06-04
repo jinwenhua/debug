@@ -102,6 +102,7 @@ mytest:Foo(99);
 #define __LUA_WRAPPER_H__
 
 extern "C" {
+	#include "luaconf.h"
     #include "lua.h"
     #include "lualib.h"
     #include "lauxlib.h"

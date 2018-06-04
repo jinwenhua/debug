@@ -18,7 +18,7 @@ int main(int argc, char *argv[])
     luaL_openlibs(luaEnv);
 	L_LUA_WRAPPER_REGISTER(DebugServerWrapper, luaEnv);
 	char *buffer;
-	char paht[256] = { 0 };
+	char path[256] = { 0 };
 	//也可以将buffer作为输出参数  
 	if ((buffer = getcwd(NULL, 0)) == NULL)
 	{
@@ -26,12 +26,13 @@ int main(int argc, char *argv[])
 	}
 	else
 	{
-		sprintf(paht, "%s\\test.lua", buffer);
+		sprintf(path, "%s\\test.lua", buffer);
+        path[254] = 0;
 		printf("file: %s\n", buffer);
 		free(buffer);
 	}
 
-    int nRetCode = luaL_dofile(luaEnv, paht);
+    int nRetCode = luaL_dofile(luaEnv, path);
     if(nRetCode)
     {
         printf("error pcall:\n %s\n", luaL_tolstring(luaEnv, -1, NULL));
