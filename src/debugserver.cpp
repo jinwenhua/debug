@@ -74,13 +74,13 @@ m_ThreadRecv()
 DebugServer::~DebugServer()
 {
     UnInit();
+	StopThread();
 	StopRecv();
 	StopConsole();
 }
 
 int DebugServer::UnInit()
 {
-    StopThread();
     if (m_nSocketClient > 0)
     {
         ::closesocket(m_nSocketClient);
@@ -129,6 +129,11 @@ void DebugServer::StopThread()
 {
     if (m_Thread.joinable())
     {   
+		if (m_nSocketLisent > 0)
+		{
+			::closesocket(m_nSocketLisent);
+			m_nSocketLisent = INVALID_SOCKET;
+		}
 		m_Thread.join();
     }
 }
@@ -238,7 +243,7 @@ void DebugServer::StartRecv()
 			std::this_thread::sleep_for(std::chrono::milliseconds(100));
 			
 
-		} while (true);
+		} while (!(this->CheckRunState(DBG_RUN_STATE::DBG_NONE)));
 	};
 
 	m_ThreadRecv = std::move(std::thread(fThread));
@@ -248,6 +253,7 @@ void DebugServer::StopRecv()
 {
 	if (m_ThreadRecv.joinable())
 	{
+		UnInit();
 		m_ThreadRecv.join();
 	}
 }

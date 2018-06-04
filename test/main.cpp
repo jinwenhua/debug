@@ -38,13 +38,19 @@ int main(int argc, char *argv[])
         printf("error pcall:\n %s\n", luaL_tolstring(luaEnv, -1, NULL));
     }
 
-    lua_getglobal(luaEnv, "on_tick");
-    lua_pcall(luaEnv, 0, 0, 0);
-    lua_pop(luaEnv, -1);
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	int running = 1;
+	while (running == 1)
+	{
+		lua_getglobal(luaEnv, "on_tick");
+		lua_pcall(luaEnv, 0, 1, 0);
+		running = luaL_checkint(luaEnv, -1);
+		lua_pop(luaEnv, -1);
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	}
 
+	std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     lua_close(luaEnv);
-
+	printf("press any key to exit.");
     getchar();
     return 0;
 }
