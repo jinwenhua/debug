@@ -22,7 +22,7 @@ int main(int argc, char *argv[])
 	//也可以将buffer作为输出参数  
 	if ((buffer = getcwd(NULL, 0)) == NULL)
 	{
-		perror("getcwd error");
+		perror("getcwd error\n");
 	}
 	else
 	{
@@ -50,7 +50,7 @@ int main(int argc, char *argv[])
 
 	std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     lua_close(luaEnv);
-	printf("press any key to exit.");
+	printf("press any key to exit.\n");
     getchar();
     return 0;
 }

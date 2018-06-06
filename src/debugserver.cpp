@@ -45,7 +45,7 @@ void DebugServer::AcceptThread()
 				}
 				else
 				{
-					std::string msg("debug> connection already exist.");
+					std::string msg("debug> connection already exist.\n");
 					::send(conn, msg.c_str(), msg.length(), 0);
 					std::this_thread::sleep_for(std::chrono::milliseconds(100));
 					::closesocket(conn);
@@ -227,8 +227,10 @@ void DebugServer::StartRecv()
 					if (this->m_qRecv.size() < 100)
 					{
 						this->m_qRecv.push(msg);
+						printf("==> %s\n", msg.c_str());
 					}
 				}
+
 			} while (msg.length() > 0);
 
 			if ( (nstep++ % 10) == 0 )
@@ -361,7 +363,7 @@ int DebugServer::Dettach()
         ::closesocket(m_nSocketClient);
         m_nSocketClient = INVALID_SOCKET;
         SetRunState(DBG_RUN_STATE::DBG_DETACH);
-		printf("debug> connection is broken.");
+		printf("debug> connection is broken.\n");
         nRet = 1;
     }
 

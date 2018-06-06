@@ -1,12 +1,12 @@
 local dbg = DebugServer();
 -- print(dbg.StartServer)
 dbg:StartServer(8869);
-dbg:StartConsole();
+-- dbg:StartConsole();
 function on_tick()
 	local msg = dbg:Revc();
 	if msg then
-		-- print(1111, "hellow", msg);
-		-- dbg:Send("whate");
+		-- print("debug>", msg);
+		-- dbg:Send(msg);
 	end
 	
 	local sline = dbg:ReadCmd();
