@@ -6,8 +6,27 @@ extern "C" {
 }
 
 #include "debugserver.h"
-
+#include <vector>
 L_DEFINE_LUA_CLASS(DebugServerWrapper, DebugServer);
+
+std::vector<std::string> s_split(const std::string& str, const std::string& delim) {
+	std::vector<std::string> res;
+	if ("" == str) return res;
+	//先将要切割的字符串从string类型转换为char*类型  
+	char * strs = new char[str.length() + 1]; //不要忘了  
+	strcpy(strs, str.c_str());
+
+	char * d = new char[delim.length() + 1];
+	strcpy(d, delim.c_str());
+
+	char *p = strtok(strs, d);
+	while (p) {
+		std::string s = p; //分割得到的字符串转换为string类型  
+		res.push_back(s); //存入结果数组  
+		p = strtok(NULL, d);
+	}
+	return res;
+}
 
 void DebugServer::AcceptThread()
 {
@@ -216,19 +235,25 @@ void DebugServer::StartRecv()
 			{
 				msg.clear();
 				this->_Recv(msg);
-				if (msg.length() == len && msg == spong)
+				std::string delim("&|&");
+				std::vector<std::string> v_msg = s_split(msg, delim);
+				for (int i = 0; i < v_msg.size(); i++)
 				{
-					// 收到ping
-					this->m_nPing = 10;
-				}
-				else if (msg.length() > 0)
-				{
-					std::lock_guard<std::mutex> lck(this->m_mtxRecv);
-					if (this->m_qRecv.size() < 100)
+					if (v_msg[i].length() == len && v_msg[i] == spong)
 					{
-						this->m_qRecv.push(msg);
-						printf("==> %s\n", msg.c_str());
+						// 收到ping
+						this->m_nPing = 10;
 					}
+					else if (v_msg[i].length() > 0)
+					{
+						std::lock_guard<std::mutex> lck(this->m_mtxRecv);
+						if (this->m_qRecv.size() < 100)
+						{
+							this->m_qRecv.push(v_msg[i]);
+							printf("==> %s\n", v_msg[i].c_str());
+						}
+					}
+
 				}
 
 			} while (msg.length() > 0);
