@@ -272,7 +272,7 @@ function l_debug.hook_crl(cmd, line)
         self.match.n_begin = 0;
         self.match.n_line = 0;
         self.match.n_end = 0;
-        self.match.n_index = 0;        
+        self.match.n_index = 0;
         self:set_hook_c();
     end
 

@@ -133,7 +133,7 @@ int DebugServer::StartServer(short port)
             nRet = 1;
         }
         else
-            printf("debug> listening socket already existed: %d\n", m_nSocketClient);
+            printf("debug> debugserver is running. SocketClient: %d\n", m_nSocketClient);
     }
     return nRet;
 }
