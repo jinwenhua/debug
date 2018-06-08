@@ -154,7 +154,7 @@ function l_debug:set_enable(index, benalbe)
         self.match.n_begin = 0;
         self.match.n_line = 0;
         self.match.n_end = 0;
-        self.match.n_index = 0;        
+        self.match.n_index = 0;
     end
 
     if benalbe == 0 then

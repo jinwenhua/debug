@@ -6,6 +6,7 @@ extern "C" {
 }
 
 #include "debugserver.h"
+#include "json.hpp"
 #include <vector>
 L_DEFINE_LUA_CLASS(DebugServerWrapper, DebugServer);
 
@@ -218,9 +219,12 @@ void DebugServer::StartRecv()
 		return;
 
 	auto fThread = [this]() -> void {
-		std::string sping("ping");
-		std::string spong("pong");
-		int len = spong.length();
+		nlohmann::json stjson;
+		stjson["command"] = "ping";
+		stjson["seq"] = 0;
+		stjson["type"] = "request";
+		std::string sping = stjson.dump();
+		std::string delim("&|&");
 		int nstep = 0;
 		do
 		{
@@ -235,30 +239,24 @@ void DebugServer::StartRecv()
 			{
 				msg.clear();
 				this->_Recv(msg);
-				std::string delim("&|&");
-				std::vector<std::string> v_msg = s_split(msg, delim);
-				for (int i = 0; i < v_msg.size(); i++)
+				if (msg.length() > 0)
 				{
-					if (v_msg[i].length() == len && v_msg[i] == spong)
+					std::vector<std::string> v_msg = s_split(msg, delim);
+					for (int i = 0; i < v_msg.size(); i++)
 					{
-						// 收到ping
-						this->m_nPing = 10;
-					}
-					else if (v_msg[i].length() > 0)
-					{
+						// 有数据则链路是通的，恢复ping计数
+						this->m_nPing = 3;
 						std::lock_guard<std::mutex> lck(this->m_mtxRecv);
 						if (this->m_qRecv.size() < 100)
 						{
 							this->m_qRecv.push(v_msg[i]);
-							printf("==> %s\n", v_msg[i].c_str());
+							//printf("==> %s\n", v_msg[i].c_str());
 						}
 					}
-
 				}
-
 			} while (msg.length() > 0);
 
-			if ( (nstep++ % 10) == 0 )
+			if ( (++nstep % 50) == 0 )
 			{
 				
 				if (this->m_nPing-- < 0)
@@ -293,11 +291,14 @@ int DebugServer::Send(std::string& msg)
     {
         return 0;
     }
-
-    if(::send(m_nSocketClient, msg.c_str(), msg.length(), 0) > 0)
-    {
-        nRet = 1;
-    }
+	if (msg.length() > 0)
+	{
+		msg.append("&|&");
+		if(::send(m_nSocketClient, msg.c_str(), msg.length(), 0) > 0)
+		{
+			nRet = 1;
+		}
+	}
     return nRet;
 }
 
@@ -531,8 +532,8 @@ L_REG_TYPE(DebugServerWrapper) DebugServerWrapper::Functions[] =
     {"Send", &DebugServerWrapper::Send},
 	{"Revc", &DebugServerWrapper::Recv},
 	{"Dettach", &DebugServerWrapper::Dettach},
-	{"ReadCmd", &DebugServerWrapper::ReadCmd },
-	{"StartConsole", &DebugServerWrapper::StartConsole },
+	{"ReadCmd", &DebugServerWrapper::ReadCmd},
+	{"StartConsole", &DebugServerWrapper::StartConsole},
 	{"StopConsole", &DebugServerWrapper::StopConsole },
 	{"slee", &DebugServerWrapper::sleepmilliseconds },
     {NULL, NULL}
