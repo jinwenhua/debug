@@ -16,6 +16,7 @@ CMakeCache.txt
 *.tlog
 *.dll
 *.lib
+*.exp
 cmake_build/
 .vs_lua/
 luacmake_build.*
