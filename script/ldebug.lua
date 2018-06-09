@@ -22,11 +22,11 @@ l_debug.WRITE_INFOR = 1;
 
 function l_debug:init()
     self:_init();
-    self.fwrite("init success.");
+    self.fwrite("init success.\n");
 end
 
 function l_debug:_init()
-    self.fwrite = self.print;
+    self.fwrite = iowrite;
     self.freadline = iolines;
     self.map = {};
     self.list = {};
@@ -44,7 +44,7 @@ end
 
 function l_debug:release()
     self:_init();
-    self.fwrite("debug finish.");
+    self.fwrite("debug finish.\n");
     self:unhook();
 end
 
@@ -73,7 +73,7 @@ function l_debug:add_break_point(sbreak)
 
     local t_index = self.map[info.sfile];
     if t_index and t_index[info.nline] then
-        local serr = sformat("this postion haved a break point: \n%s:%s", info.sfile, info.nline);
+        local serr = sformat("this postion haved a break point: \n%s:%s\n", info.sfile, info.nline);
         self.fwrite(serr, self.WRITE_ERROR);
         return 0;
     end
@@ -89,7 +89,7 @@ function l_debug:add_break_point(sbreak)
         self:set_hook_c();
     end
     
-    local sinfo = sformat("add break point:\n%s:%s", info.sfile, info.nline);
+    local sinfo = sformat("add break point:\n%s:%s\n", info.sfile, info.nline);
     self.fwrite(sinfo, self.WRITE_INFOR);
     return 1;
 end
@@ -97,7 +97,7 @@ end
 function l_debug:del_break_point(index)
     local info = self.list[index];
     if not info then
-        local sinfo = "break point don`t exist."
+        local sinfo = "break point don`t exist.\n"
         self.fwrite(sinfo, self.WRITE_INFOR);
         return 0;
     end
@@ -120,7 +120,7 @@ function l_debug:del_break_point(index)
         self:unhook();
     end
     
-    local sinfo = "break point deleted success."
+    local sinfo = "break point deleted success.\n"
     self.fwrite(sinfo, self.WRITE_INFOR);  
     return 1;
 end
@@ -134,14 +134,14 @@ function l_debug:show_break_point()
             t_list[#t_list + 1] = sinfo;
         end
     end
-    local slist = (t_list[1] and  tconcat(t_list, "\n")) or "no break point.";
-    self.fwrite(slist, self.WRITE_INFOR);
+    local slist = (t_list[1] and  tconcat(t_list, "\n")) or "no break point.\n";
+    self.fwrite(slist.."\n", self.WRITE_INFOR);
 end
 
 function l_debug:set_enable(index, benalbe)
     local info = self.list[index];
     if not info then
-        local sinfo = "break point don`t exist."
+        local sinfo = "break point don`t exist.\n"
         self.fwrite(sinfo, self.WRITE_INFOR);
         return 0;
     end
@@ -170,7 +170,7 @@ function l_debug:set_enable(index, benalbe)
         end
     end
 
-    local sinfo = "break point set: enable = "..benalbe;
+    local sinfo = "break point set: enable = "..benalbe..'\n';
     self.fwrite(sinfo, self.WRITE_INFOR);  
     return 1;
 end
@@ -178,7 +178,7 @@ end
 function l_debug:set_mode(smode)
     self.mode = smode or self.DEBUG_MODE_NEXT;
     local sinfo = sformat("debug mode change to: %s", self.mode);
-    self.fwrite(sinfo, self.WRITE_INFOR);
+    self.fwrite(sinfo..'\n', self.WRITE_INFOR);
     return 1;
 end
 
@@ -211,7 +211,7 @@ function l_debug.hook_c(cmd)
 
     s_source = slower(s_source);
     s_source = sgsub(s_source, "\\", "/");
-    -- local sinfo = sformat("[%s|%s]%s:%s", s_what, cmd, s_source, n_linedefined);
+    -- local sinfo = sformat("[%s|%s]%s:%s\n", s_what, cmd, s_source, n_linedefined);
     -- self.fwrite(sinfo, self.WRITE_INFOR);
     local index = self:find_index(s_source, n_linedefined, n_lastlinedefined);
 	if type(index) ~= "number" then
@@ -261,7 +261,7 @@ function l_debug.hook_crl(cmd, line)
     s_source = slower(s_source);
     s_source = sgsub(s_source, "\\", "/");
     if cmd == "line" and line ~= n_lastlinedefined and s_source == self.match.s_file then
-        local sinfo = sformat("[%s|%s]%s:%s in %s()", s_what, cmd, s_source or "nil", s_currentline or "nil", s_name or "nil");
+        local sinfo = sformat("[%s|%s]%s:%s in %s()\n", s_what, cmd, s_source or "nil", s_currentline or "nil", s_name or "nil");
         self.fwrite(sinfo, self.WRITE_INFOR);
     end
 
@@ -292,7 +292,7 @@ function l_debug.hook_r(cmd)
 		return;
     end
     
-    -- local sinfo = sformat("[%s|%s]%s:%s", s_what, cmd, s_source, n_currentline);
+    -- local sinfo = sformat("[%s|%s]%s:%s\n", s_what, cmd, s_source, n_currentline);
     -- self.fwrite(sinfo, self.WRITE_INFOR);
 	self:set_hook_crl()
 end
@@ -309,11 +309,11 @@ end
 function l_debug:get_break_info(sbreak)
     local _, _, file, l = sfind(sbreak, "(%w+.*%.%w+)%s*:%s*(%d+)%s*");
     if not file then
-        return nil, "invalid in put.";
+        return nil, "invalid in put.\n";
     end
     local line = tonumber(l);
     if not line then
-        return nil, "line num error.";
+        return nil, "line num error.\n";
     end
     local info = {}
     file = sgsub(file, "\\", "/");
