@@ -104,7 +104,6 @@ end
 function fooup()
 	local jsofi = 8978;
 	local jgsjoi = 242314;
-	assert(false);
 	local rt = function(poi)
 		local d = 1;
 		local x = 2;

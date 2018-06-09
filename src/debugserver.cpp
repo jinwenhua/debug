@@ -241,7 +241,7 @@ void DebugServer::StartRecv()
 				this->_Recv(msg);
 				if (msg.length() > 0)
 				{
-					std::vector<std::string> v_msg = s_split(msg, delim);
+					auto v_msg = s_split(msg, delim);
 					for (int i = 0; i < v_msg.size(); i++)
 					{
 						// 有数据则链路是通的，恢复ping计数
