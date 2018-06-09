@@ -9,6 +9,7 @@
 ]]
 local sformat = string.format;
 local sfind = string.find;
+local strlen = string.len;
 local ssub = string.sub;
 local sgsub = string.gsub;
 local sgmatch = string.gmatch;
@@ -19,8 +20,7 @@ local dgetinfo = debug.getinfo;
 local dtraceback = debug.traceback;
 local dgetupvalue = debug.getupvalue;
 local dgetlocal = debug.getlocal;
-local iowrite = io.write
-local iolines = io.lines
+local tinsert = table.insert
 local tconcat = table.concat;
 local fxpcall = xpcall;
 
@@ -103,18 +103,15 @@ function ldb_mrg:updatestackinfo(nlevel)
 		count = count + 1;
 		if name then
 			local stype = type(val);
-			local _val = "nil"
 			local _type = "string"
 			if stype == "table" then
 				_type = "object";
-				_val = tostring(val);
 			elseif stype == "number" then
 				_type = "float";
-				_val = val;
-			else
-				_type = "string";
-				_val = tostring(val);
+			elseif stype == "nil" then
+				val = "nil";
 			end
+			_val = self:copy_no_loop(val);
 			self.tvariables = self.tvariables or {}
 			self.tvariables[index] = {name = name, value = _val, jstype = _type, luatype = "upvalue"};
 			index = index + 1;
@@ -127,14 +124,15 @@ function ldb_mrg:updatestackinfo(nlevel)
 		count = count + 1;
 		if name then
 			local stype = type(val);
-			local _val = "nil"
 			local _type = "string"
 			if stype == "table" then
 				_type = "object";
 			elseif stype == "number" then
 				_type = "float";
+			elseif stype == "nil" then
+				val = "nil";
 			end
-			_val = tostring(val);
+			_val = self:copy_no_loop(val);
 			self.tvariables = self.tvariables or {}
 			self.tvariables[index] = {name = name, value = _val, jstype = _type, luatype = "local"};
 			index = index + 1;
@@ -162,6 +160,48 @@ end
 function ldb_mrg:sleep(millis)
 	l_dbg:slee(millis);
 end
+
+function ldb_mrg:copy_no_loop(value, max_deep, max_count)
+	local value_cach = {};
+	local v_copy = nil;
+	local deep = 0;
+	max_deep = max_deep or 4;
+	max_count = max_count or 8;
+	function _copy_no_loop(value)
+		deep = deep + 1;
+        local value_type = type(value);
+        if value_type == "table" then
+			if value_cach[value] or deep >= max_deep  then
+				deep = deep - 1;
+                return tostring(value);
+            end
+
+			local t_temp = {};
+			value_cach[value] = 1;
+			local count = 0;
+			for k, v in pairs(value) do 
+				count = count + 1;
+				t_temp[k] = _copy_no_loop(v);
+				if count >= max_count then
+					break;
+				end
+			end
+			deep = deep - 1;
+			return t_temp;
+        elseif value_type == "number" then
+            return value;
+		elseif value_type == "string" then
+			if strlen(value) > 64 then
+				value = ssub(value, 1, 64);
+			end
+            return value;
+        end
+		return tostring(value);
+    end
+    v_copy = _copy_no_loop(value);
+    return v_copy;
+end
+
 
 function ldb_mrg:encode(t_msg)
 	local ok, msg = self:pcall(ldb_json.encode, t_msg);
@@ -323,8 +363,10 @@ end
 ldb_mrg:add_msg_handler("variables", ldb_mrg.msg_on_variables);
 
 function ldb_mrg:msg_on_setbreakpoints(t_msg, msg)
-	local points = t_msg["points"];
+	local t_body = t_msg["body"] or {};
+	local points = t_body["points"];
 	if type(points) == "table" then
+		t_msg["body"] = t_body;
 		local file_name = points["path"];
 		local lines = points["lines"] or {};
 		if type(file_name) == "string" then
@@ -336,5 +378,25 @@ function ldb_mrg:msg_on_setbreakpoints(t_msg, msg)
 	end
 end
 ldb_mrg:add_msg_handler("setbreakpoints", ldb_mrg.msg_on_setbreakpoints);
+
+function ldb_mrg:msg_on_hover(t_msg, msg)
+	local t_body = t_msg["body"] or {};
+	local var_name = t_body["name"];
+	local sfunc = sformat([[return %s]], var_name);
+	local fun = load(sfunc);
+	if type(fun) == "function" then
+		local ok, var = self:pcall(fun);
+		if ok then
+			t_msg["body"] = t_body;
+			var = self:copy_no_loop(var);
+			t_body["value"] = var;
+			local s_msg = self:encode(t_msg);
+			if s_msg then
+				l_dbg:Send(s_msg);
+			end
+		end
+	end
+end
+ldb_mrg:add_msg_handler("hover", ldb_mrg.msg_on_hover);
 
 return ldb_mrg;
