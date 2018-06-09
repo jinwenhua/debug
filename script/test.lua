@@ -1,5 +1,7 @@
 local json = require("json")
 
+local iowrite = io.write
+
 l_dbg = l_dbg or DebugServer();
 -- print(l_dbg.StartServer)
 l_dbg:StartServer(8869);
@@ -39,13 +41,15 @@ function on_tick()
 			end
 		end
 		-- l_dbg:Send(msg);
+
+		iowrite("\ndebug> ");
 	end
 	
 	local sline = l_dbg:ReadCmd();
 	if sline then
 		-- print("sline = ", sline)
 		-- local _, _, cmd, sline = string.find(sline, "(%w+)(.*)%c$")
-		local _, _, cmd, sline = string.find(sline, "(%w+)(.*)")
+		local _, _, cmd, sparam = string.find(sline, "(%w+)(.*)")
 		-- print(string.format("debug> cmd = %s, sline = %s", cmd or "nil", sline or "nil"));
 		-- print(1111, type(cmd), cmd, string.len(cmd), string.len("close"), cmd == "close");
 		if cmd then
@@ -55,7 +59,8 @@ function on_tick()
 				-- print("stop")
 				l_dbg:StopConsole();
 				return 0;
-			elseif cmd == "do" then
+			else
+				-- if not define command then dostring it
 				if type(sline) == "string" then
 					local fun = load(sline);
 					if type(fun) == "function" then
@@ -67,6 +72,8 @@ function on_tick()
 					end
 				end
 			end
+
+			iowrite("\ndebug> ");
 		end
 	end
 	
@@ -97,6 +104,7 @@ end
 function fooup()
 	local jsofi = 8978;
 	local jgsjoi = 242314;
+	assert(false);
 	local rt = function(poi)
 		local d = 1;
 		local x = 2;
@@ -168,4 +176,5 @@ function foo5()
 	until not name
 end
 
+iowrite("\ndebug> ");
 return l_dbg;
