@@ -24,7 +24,7 @@ l_debug.WRITE_INFOR = 1;
 
 function l_debug:init()
     self:_init();
-    self.fwrite("init success.\n");
+    self.fwrite("l_debug init success.\n");
 end
 
 function l_debug.fwrite(...)
@@ -377,7 +377,7 @@ function l_debug:get_break_info(sbreak)
     return info;
 end
 
-l_debug:init();
+-- l_debug:init();
 -- l_debug:release();
 
 return l_debug;

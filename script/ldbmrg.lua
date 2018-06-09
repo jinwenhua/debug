@@ -1,15 +1,19 @@
 local sformat = string.format;
 local sfind = string.find;
 local ssub = string.sub;
-local sgsub = string.gsub
+local sgsub = string.gsub;
 local sgmatch = string.gmatch;
 local slower = string.lower;
 local dsethook = debug.sethook;
 local gethook = debug.gethook;
 local dgetinfo = debug.getinfo;
+local dtraceback = debug.traceback;
+local dgetupvalue = debug.getupvalue;
+local dgetlocal = debug.getlocal;
 local iowrite = io.write
 local iolines = io.lines
 local tconcat = table.concat;
+local fxpcall = xpcall;
 
 require("ldebugserver");
 l_dbg = l_dbg or DebugServer();
@@ -40,6 +44,20 @@ function ldb_mrg:init(port, bconsole)
 	self.tvariables = self.tvariables or nil;
 end
 
+function ldb_mrg:run()
+	self.isrunning = true;
+	l_dbg:StartConsole();
+	while self.isrunning do 
+		self:on_tick();
+		self:sleep(100);
+	end
+end
+
+function ldb_mrg:stop()
+	self.isrunning = false;
+	l_dbg:StopConsole();
+end
+
 function ldb_mrg:add_break_point(file_name, line_no)
     l_debug:add_break_point_by_info(file_name, line_no);
 end
@@ -64,15 +82,15 @@ function ldb_mrg:updatestackinfo(nlevel)
 	nlevel = nlevel or 2;
 	nlevel = nlevel + 1;
 	local e = 1;
-	self.straceback = debug.traceback("stack", nlevel);
+	self.straceback = dtraceback("stack", nlevel);
 	
-	local func = debug.getinfo(nlevel, "f").func;
+	local func = dgetinfo(nlevel, "f").func;
 	local index = 1;
 	self.tvariables = nil;
 	local name, val;
 	local count = 1;
 	repeat
-		name, val = debug.getupvalue(func, count)
+		name, val = dgetupvalue(func, count)
 		count = count + 1;
 		if name then
 			local stype = type(val);
@@ -96,7 +114,7 @@ function ldb_mrg:updatestackinfo(nlevel)
 	
 	local count = 1;
 	repeat
-		name, val = debug.getlocal(nlevel, count)
+		name, val = dgetlocal(nlevel, count)
 		count = count + 1;
 		if name then
 			local stype = type(val);
@@ -157,10 +175,10 @@ end
 function ldb_mrg:pcall(func, ...)
     local errhander = function(e)
         print("debug> error info: "  .. e);
-        print("debug> stack info: " .. debug.traceback("current 2 stack: " ,2));
+        print("debug> stack info: " .. dtraceback("current 2 stack: " ,2));
     end
 
-    return xpcall(func, errhander, ...);
+    return fxpcall(func, errhander, ...);
 end
 --===================proccess client message========================================
 function ldb_mrg:add_io_handler(command, fhandler)
@@ -171,7 +189,7 @@ end
 function ldb_mrg:proccess_io()
 	local sline = l_dbg:ReadCmd();
 	if type(sline) == "string" then
-		local _, _, command, sparam = string.find(sline, "(%w+)(.*)")
+		local _, _, command, sparam = sfind(sline, "(%w+)(.*)")
         if type(command) == "string" then
 			self.io_handler_map = self.io_handler_map or {};
 			local fhandler = self.io_handler_map[command];
@@ -294,5 +312,20 @@ function ldb_mrg:msg_on_variables(t_msg, msg)
 	self:set_current_variables(nil)
 end
 ldb_mrg:add_msg_handler("variables", ldb_mrg.msg_on_variables);
+
+function ldb_mrg:msg_on_setbreakpoints(t_msg, msg)
+	local points = t_msg["points"];
+	if type(points) == "table" then
+		local file_name = points["path"];
+		local lines = points["lines"] or {};
+		if type(file_name) == "string" then
+			l_debug:clear_break_point(file_name);
+			for _, line_no in pairs(lines) do 
+				l_debug:add_break_point_by_info(file_name, line_no, 1);
+			end
+		end
+	end
+end
+ldb_mrg:add_msg_handler("setbreakpoints", ldb_mrg.msg_on_setbreakpoints);
 
 return ldb_mrg;
