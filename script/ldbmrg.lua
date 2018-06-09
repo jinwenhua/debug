@@ -1,3 +1,12 @@
+--[[
+@ lua debug for vs code
+@
+@ Author luhengsi 
+@ Mail   luhengsi@163.com
+@ Date   2018-06-10
+@
+@ please check Licence.txt file for licence and legal issues. 
+]]
 local sformat = string.format;
 local sfind = string.find;
 local ssub = string.sub;
