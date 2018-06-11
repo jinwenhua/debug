@@ -80,7 +80,7 @@ function ldb_mrg:set_current_stack(straceback)
 end
 
 function ldb_mrg:set_current_variables(tvariables)
-	if type(straceback) == "table" then
+	if type(tvariables) == "table" then
 		self.tvariables = tvariables;
 	else
 		self.tvariables = nil;
@@ -92,31 +92,30 @@ function ldb_mrg:updatestackinfo(nlevel)
 	nlevel = nlevel + 1;
 	local e = 1;
 	self.straceback = dtraceback("stack", nlevel);
-	
 	local func = dgetinfo(nlevel, "f").func;
 	local index = 1;
 	self.tvariables = nil;
 	local name, val;
-	local count = 1;
-	repeat
-		name, val = dgetupvalue(func, count)
-		count = count + 1;
-		if name then
-			local stype = type(val);
-			local _type = "string"
-			if stype == "table" then
-				_type = "object";
-			elseif stype == "number" then
-				_type = "float";
-			elseif stype == "nil" then
-				val = "nil";
-			end
-			_val = self:copy_no_loop(val);
-			self.tvariables = self.tvariables or {}
-			self.tvariables[index] = {name = name, value = _val, jstype = _type, luatype = "upvalue"};
-			index = index + 1;
-		end
-	until not name
+	-- local count = 1;
+	-- repeat
+		-- name, val = dgetupvalue(func, count)
+		-- count = count + 1;
+		-- if name then
+			-- local stype = type(val);
+			-- local _type = "string"
+			-- if stype == "table" then
+				-- _type = "object";
+			-- elseif stype == "number" or stype == "string" then
+				-- _type = "float";
+				-- _val = tostring(val);--self:copy_no_loop(val);
+				-- self.tvariables = self.tvariables or {}
+				-- self.tvariables[index] = {name = name, value = _val, jstype = _type, luatype = "upvalue"};
+				-- index = index + 1;
+			-- elseif stype == "nil" then
+				-- val = "nil";
+			-- end
+		-- end
+	-- until not name
 	
 	local count = 1;
 	repeat
@@ -129,13 +128,18 @@ function ldb_mrg:updatestackinfo(nlevel)
 				_type = "object";
 			elseif stype == "number" then
 				_type = "float";
+				_val = tostring(val);--self:copy_no_loop(val);
+				self.tvariables = self.tvariables or {}
+				self.tvariables[index] = {name = name, value = _val, jstype = _type, luatype = "local"};
+				index = index + 1;
+			elseif stype == "string" then
+				_val = tostring(val);--self:copy_no_loop(val);
+				self.tvariables = self.tvariables or {}
+				self.tvariables[index] = {name = name, value = _val, jstype = _type, luatype = "local"};
+				index = index + 1;
 			elseif stype == "nil" then
 				val = "nil";
 			end
-			_val = self:copy_no_loop(val);
-			self.tvariables = self.tvariables or {}
-			self.tvariables[index] = {name = name, value = _val, jstype = _type, luatype = "local"};
-			index = index + 1;
 		end
 	until not name
 end
@@ -147,7 +151,7 @@ function ldb_mrg:send_match_break_point(file_name, line_no)
 	local t_msg = {};
 	t_msg["command"] = "onbreak";
 	t_msg["seq"] = 0;
-	t_msg["type"] = "request";
+	t_msg["type"] = "response";
 	t_msg["point"] = {};
 	t_msg["point"].path = file_name;
 	t_msg["point"].line = line_no;
@@ -245,8 +249,10 @@ function ldb_mrg:proccess_io()
 			if type(fhandler) == "function" then
 				ldb_mrg:pcall(fhandler, self, sparam);
 			else
-				-- if not define command then dostring it
-				self:io_on_default(sline);
+				if l_debug.mode ~= l_debug.DEBUG_MODE_WAIT then
+					-- if not define command then dostring it
+					self:io_on_default(sline);
+				end
 			end
 		end
     end
@@ -284,6 +290,7 @@ function ldb_mrg:set_msg_cach(command, info)
 end
 
 function ldb_mrg:get_msg_cach(command)
+	self.msg_cach_map = self.msg_cach_map or {}
 	return self.msg_cach_map[command];
 end
 
@@ -292,6 +299,9 @@ function ldb_mrg:proccess_msg()
 	if type(msg) == "string" then
 		local t_msg = self:decode(msg);
 		if t_msg and type(t_msg.command) == "string" then
+			if t_msg.command ~= "pong" then
+				print("debug>", msg)
+			end
             self.msg_handler_map = self.msg_handler_map or {};
             local fhandler = self.msg_handler_map[t_msg.command];
             if type(fhandler) == "function" then
@@ -313,11 +323,11 @@ end
 ldb_mrg:add_msg_handler("continue", ldb_mrg.msg_on_continue);
 
 function ldb_mrg:send_next_cach(tparam)
-	local info = self:get_msg_cach(next);
+	local info = self:get_msg_cach("next");
 	if not info then
 		return;
 	end
-	self:set_msg_cach(nil);
+	self:set_msg_cach("next", nil);
 	if tparam then
 		local t_msg = info.t_msg;
 		t_msg["point"] = {};
@@ -347,33 +357,35 @@ function ldb_mrg:msg_on_stack(t_msg, msg)
 	if s_msg then
 		l_dbg:Send(s_msg);
 	end
-
-	self:set_current_stack(nil);
+	-- self.straceback = nil;
 end
 ldb_mrg:add_msg_handler("stack", ldb_mrg.msg_on_stack);
 
 function ldb_mrg:msg_on_variables(t_msg, msg)
 	t_msg["body"] = self.tvariables;
 	local s_msg = self:encode(t_msg);
-	if s_msg == "string" then
+	if type(s_msg) == "string" then
+		-- print(99999, s_msg);
 		l_dbg:Send(s_msg);
 	end
-	self:set_current_variables(nil)
+	-- self:set_current_variables(nil)
 end
 ldb_mrg:add_msg_handler("variables", ldb_mrg.msg_on_variables);
 
+function ldb_mrg:msg_on_clearpoints(t_msg, msg)
+	local file_name = t_msg["arguments"];
+	if type(file_name) == "string" then
+		l_debug:clear_break_point(file_name)
+	end
+end
+ldb_mrg:add_msg_handler("clearpoints", ldb_mrg.msg_on_clearpoints);
+
 function ldb_mrg:msg_on_setbreakpoints(t_msg, msg)
-	local t_body = t_msg["body"] or {};
-	local points = t_body["points"];
-	if type(points) == "table" then
-		t_msg["body"] = t_body;
-		local file_name = points["path"];
-		local lines = points["lines"] or {};
-		if type(file_name) == "string" then
-			l_debug:clear_break_point(file_name);
-			for _, line_no in pairs(lines) do 
-				l_debug:add_break_point_by_info(file_name, line_no, 1);
-			end
+	local file_name = t_msg["path"];
+	local lines = t_msg["lines"] or {};
+	if type(file_name) == "string" then
+		for _, line_no in pairs(lines) do 
+			l_debug:add_break_point_by_info(file_name, line_no, 1);
 		end
 	end
 end

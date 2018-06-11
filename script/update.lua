@@ -5,8 +5,8 @@ t_msg["command"] = "onbreak";
 t_msg["seq"] = 0;
 t_msg["type"] = "response";
 t_msg["point"] = {};
-t_msg["point"].path = "E:\\github\\document\\study\\lua\\a_start_search_v4_1.lua";
-t_msg["point"].line = 46;
+t_msg["point"].path = "e:\\github\\vscode-l-debug\\script\\a_start_search.lua";
+t_msg["point"].line = 308;
 local msg = json.encode(t_msg);
 -- print("debug> msg = ", type(msg))
 if type(msg) == "string" then
@@ -14,5 +14,3 @@ if type(msg) == "string" then
 	l_dbg:Send(msg);
 	print("debug> ", msg)
 end
-
-
