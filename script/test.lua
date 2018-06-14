@@ -53,8 +53,8 @@ function on_tick()
 		-- print(string.format("debug> cmd = %s, sline = %s", cmd or "nil", sline or "nil"));
 		-- print(1111, type(cmd), cmd, string.len(cmd), string.len("close"), cmd == "close");
 		if cmd then
-			if cmd == "dettach" then
-				l_dbg:Dettach();
+			if cmd == "detach" then
+				l_dbg:Detach();
 			elseif cmd == "close" then
 				-- print("stop")
 				l_dbg:StopConsole();

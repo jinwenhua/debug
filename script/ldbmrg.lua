@@ -48,9 +48,6 @@ function ldb_mrg:init(port, bconsole)
 	if bconsole == 1 then
 		l_dbg:StartConsole();
 	end
-
-	self.straceback = self.straceback or nil;
-	self.tvariables = self.tvariables or nil;
 end
 
 function ldb_mrg:run()
@@ -68,80 +65,7 @@ function ldb_mrg:stop()
 end
 
 function ldb_mrg:add_break_point(file_name, line_no)
-    l_debug:add_break_point_by_info(file_name, line_no);
-end
-
-function ldb_mrg:set_current_stack(straceback)
-	if type(straceback) == "string" then
-		self.straceback = straceback;
-	else
-		self.straceback = nil;
-	end
-end
-
-function ldb_mrg:set_current_variables(tvariables)
-	if type(tvariables) == "table" then
-		self.tvariables = tvariables;
-	else
-		self.tvariables = nil;
-	end
-end
-
-function ldb_mrg:updatestackinfo(nlevel)
-	nlevel = nlevel or 2;
-	nlevel = nlevel + 1;
-	local e = 1;
-	self.straceback = dtraceback("stack", nlevel);
-	local func = dgetinfo(nlevel, "f").func;
-	local index = 1;
-	self.tvariables = nil;
-	local name, val;
-	-- local count = 1;
-	-- repeat
-		-- name, val = dgetupvalue(func, count)
-		-- count = count + 1;
-		-- if name then
-			-- local stype = type(val);
-			-- local _type = "string"
-			-- if stype == "table" then
-				-- _type = "object";
-			-- elseif stype == "number" or stype == "string" then
-				-- _type = "float";
-				-- _val = tostring(val);--self:copy_no_loop(val);
-				-- self.tvariables = self.tvariables or {}
-				-- self.tvariables[index] = {name = name, value = _val, jstype = _type, luatype = "upvalue"};
-				-- index = index + 1;
-			-- elseif stype == "nil" then
-				-- val = "nil";
-			-- end
-		-- end
-	-- until not name
-	
-	local count = 1;
-	repeat
-		name, val = dgetlocal(nlevel, count)
-		count = count + 1;
-		if name then
-			local stype = type(val);
-			local _type = "string"
-			if stype == "table" then
-				_type = "object";
-			elseif stype == "number" then
-				_type = "float";
-				_val = tostring(val);--self:copy_no_loop(val);
-				self.tvariables = self.tvariables or {}
-				self.tvariables[index] = {name = name, value = _val, jstype = _type, luatype = "local"};
-				index = index + 1;
-			elseif stype == "string" then
-				_val = tostring(val);--self:copy_no_loop(val);
-				self.tvariables = self.tvariables or {}
-				self.tvariables[index] = {name = name, value = _val, jstype = _type, luatype = "local"};
-				index = index + 1;
-			elseif stype == "nil" then
-				val = "nil";
-			end
-		end
-	until not name
+    l_debug:add_break_point(file_name, line_no);
 end
 
 function ldb_mrg:send_match_break_point(file_name, line_no)
@@ -270,6 +194,15 @@ function ldb_mrg:io_on_close(sparam)
 end
 ldb_mrg:add_io_handler("close", ldb_mrg.io_on_close);
 
+function ldb_mrg:io_on_do(sparam)
+	if l_debug.mode == l_debug.DEBUG_MODE_WAIT then
+		self:io_on_default(sparam);
+	else
+		print("debug> only wait mode can use \"do\"!");
+	end
+end
+ldb_mrg:add_io_handler("do", ldb_mrg.io_on_do);
+
 function ldb_mrg:io_on_default(sline)
 	local fun = load(sline);
 	if type(fun) == "function" then
@@ -299,9 +232,9 @@ function ldb_mrg:proccess_msg()
 	if type(msg) == "string" then
 		local t_msg = self:decode(msg);
 		if t_msg and type(t_msg.command) == "string" then
-			if t_msg.command ~= "pong" then
-				print("debug>", msg)
-			end
+			-- if t_msg.command ~= "pong" then
+				-- print("debug>", msg)
+			-- end
             self.msg_handler_map = self.msg_handler_map or {};
             local fhandler = self.msg_handler_map[t_msg.command];
             if type(fhandler) == "function" then
@@ -342,6 +275,26 @@ function ldb_mrg:send_next_cach(tparam)
 	end
 end
 
+function ldb_mrg:send_step_in_cach(tparam)
+	local info = self:get_msg_cach("step_in");
+	if not info then
+		return;
+	end
+	self:set_msg_cach("step_in", nil);
+	if tparam then
+		local t_msg = info.t_msg;
+		t_msg["point"] = {};
+		t_msg["point"].path = tparam.path;
+		t_msg["point"].line = tparam.line;
+		local msg = self:encode(t_msg);
+		if msg then
+			l_dbg:Send(msg);
+		end
+	else
+		l_dbg:Send(info.msg);
+	end
+end
+
 function ldb_mrg:msg_on_next(t_msg, msg)
 	l_debug:set_mode(l_debug.DEBUG_MODE_NEXT);
 	local info = {};
@@ -351,31 +304,39 @@ function ldb_mrg:msg_on_next(t_msg, msg)
 end
 ldb_mrg:add_msg_handler("next", ldb_mrg.msg_on_next);
 
+function ldb_mrg:msg_on_step_in(t_msg, msg)
+	l_debug:set_mode(l_debug.DEBUG_MODE_STEP_IN);
+	local info = {};
+	info.t_msg = t_msg;
+	info.msg = msg;
+	self:set_msg_cach(t_msg.command, info);
+end
+ldb_mrg:add_msg_handler("step_in", ldb_mrg.msg_on_step_in);
+
 function ldb_mrg:msg_on_stack(t_msg, msg)
-	t_msg["body"] = self.straceback;
+	t_msg["body"] = l_debug.straceback;
 	local s_msg = self:encode(t_msg);
 	if s_msg then
 		l_dbg:Send(s_msg);
 	end
-	-- self.straceback = nil;
 end
 ldb_mrg:add_msg_handler("stack", ldb_mrg.msg_on_stack);
 
 function ldb_mrg:msg_on_variables(t_msg, msg)
-	t_msg["body"] = self.tvariables;
+	t_msg["body"] = l_debug.tvariables;
 	local s_msg = self:encode(t_msg);
 	if type(s_msg) == "string" then
-		-- print(99999, s_msg);
 		l_dbg:Send(s_msg);
 	end
-	-- self:set_current_variables(nil)
 end
 ldb_mrg:add_msg_handler("variables", ldb_mrg.msg_on_variables);
 
 function ldb_mrg:msg_on_clearpoints(t_msg, msg)
-	local file_name = t_msg["arguments"];
+	local t_arg = t_msg["arguments"] or {};
+	local file_name = t_arg["path"];
+	local reset_count = t_arg["reset_count"] or 0;
 	if type(file_name) == "string" then
-		l_debug:clear_break_point(file_name)
+		l_debug:clear_break_point(file_name, reset_count)
 	end
 end
 ldb_mrg:add_msg_handler("clearpoints", ldb_mrg.msg_on_clearpoints);
@@ -385,7 +346,7 @@ function ldb_mrg:msg_on_setbreakpoints(t_msg, msg)
 	local lines = t_msg["lines"] or {};
 	if type(file_name) == "string" then
 		for _, line_no in pairs(lines) do 
-			l_debug:add_break_point_by_info(file_name, line_no, 1);
+			self:add_break_point(file_name, line_no);
 		end
 	end
 end
@@ -410,5 +371,15 @@ function ldb_mrg:msg_on_hover(t_msg, msg)
 	end
 end
 ldb_mrg:add_msg_handler("hover", ldb_mrg.msg_on_hover);
+
+function ldb_mrg:msg_on_detach(t_msg, msg)
+	l_dbg:Detach();
+end
+ldb_mrg:add_msg_handler("detach", ldb_mrg.msg_on_detach);
+
+function ldb_mrg:msg_on_detached(t_msg, msg)
+	l_debug:release();
+end
+ldb_mrg:add_msg_handler("detached", ldb_mrg.msg_on_detached);
 
 return ldb_mrg;

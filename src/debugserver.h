@@ -49,7 +49,7 @@ public:
     int StoprServer();
     int Send(std::string& msg);
 	int Recv(std::string& msg);
-    int Dettach();
+    int Detach();
     void SetRunState(DBG_RUN_STATE st);
     bool CheckRunState(DBG_RUN_STATE st);
 	int ReadCmd(std::string& cmd);
@@ -94,7 +94,7 @@ public:
     int StoprServer(lua_State* L);
     int Send(lua_State* L);
     int Recv(lua_State* L);
-	int Dettach(lua_State* L);
+	int Detach(lua_State* L);
 	int ReadCmd(lua_State* L);
 	int StartConsole(lua_State* L);
 	int StopConsole(lua_State* L);

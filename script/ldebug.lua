@@ -15,8 +15,11 @@ local sgsub = string.gsub
 local sgmatch = string.gmatch;
 local slower = string.lower;
 local dsethook = debug.sethook;
-local gethook = debug.gethook;
+local dgethook = debug.gethook;
 local dgetinfo = debug.getinfo;
+local dtraceback = debug.traceback;
+local dgetupvalue = debug.getupvalue;
+local dgetlocal = debug.getlocal;
 local iowrite = io.write
 local iolines = io.lines
 local tconcat = table.concat;
@@ -25,23 +28,36 @@ l_debug = l_debug or {};
 
 l_debug.DEBUG_MODE_RUN = "run";
 l_debug.DEBUG_MODE_NEXT = "next";
-l_debug.DEBUG_MODE_STEP = "step";
+l_debug.DEBUG_MODE_STEP_IN = "step_in";
 l_debug.DEBUG_MODE_WAIT = "wait";
-l_debug.DEBUG_MODE_MATCH = "match";
 
 l_debug.WRITE_ERROR = 0; 
 l_debug.WRITE_INFOR = 1; 
 
+l_debug.HOOK_CMD_CALL = 1
+l_debug.HOOK_CMD_LINE = 2
+l_debug.HOOK_CMD_RET = 3
+l_debug.HOOK_CMD_TAIL_CALL = 4
+
+l_debug.CMD_2_HOOK =
+{
+	["call"] = l_debug.HOOK_CMD_CALL,
+	["line"] = l_debug.HOOK_CMD_LINE,
+	["return"] = l_debug.HOOK_CMD_RET,
+	["tail return"] = l_debug.HOOK_CMD_RET,
+	["tail call"] = l_debug.HOOK_CMD_TAIL_CALL,
+}
 
 function l_debug:init()
     self:_init();
-    self.fwrite("l_debug init success.\n");
+    self:fwrite("l_debug init success.");
 end
 
-function l_debug.fwrite(...)
-    if l_debug._fwrite then
-        l_debug._fwrite(...);
-		l_debug._fwrite('\n');
+function l_debug:fwrite(...)
+	if self._fwrite then
+		local t_info = {"debug>", ...};
+		local sinfo = tconcat(t_info, "\t").."\n";
+        self._fwrite(sinfo);
     end
 end
 
@@ -55,7 +71,6 @@ function l_debug:_init()
     self._fwrite = iowrite;
     self._freadline = iolines;
     self.map = {};
-    self.list = {};
     self.match = {};
     self.count = 0;
     self.enable_count = 0;
@@ -67,18 +82,25 @@ function l_debug:_init()
     self.match.n_index = 0;
     self.match.b_break = 0;
     self.wokingpath = "";
+	self.call_deep = 0;
 end
 
 function l_debug:release()
     self:_init();
-    self.fwrite("debug finish.\n");
+    self.fwrite("debug> debug finish.\n");
     self:unhook();
+	self:reset_state();
 end
 
-function l_debug.print(...)
-    local t_info = {"debug>", ...};
-    local sinfo = tconcat(t_info, "\t").."\n";
-    iowrite(sinfo);
+function l_debug:reset_state()
+	self.mode = self.DEBUG_MODE_RUN;
+    self.match.s_file = "";
+    self.match.n_begin = 0;
+    self.match.n_line = 0;
+    self.match.n_end = 0;
+    self.match.n_index = 0;
+    self.match.b_break = 0;
+	self.call_deep = 0;
 end
 
 function l_debug:set_io_fuc(fwrite, freadline)
@@ -99,155 +121,234 @@ function l_debug:get_real_path(file_path)
 	return file_path;
 end
 
--- sbreak : script/test.lua : 17 
-function l_debug:add_break_point(sbreak)
-    local info, serr = self:get_break_info(sbreak);
-    if not info then
-        self.fwrite(serr, self.WRITE_ERROR);
-        return 0;
-    end
-
-    return self:add_break_point_by_info(info.sfile, info.nline, info.enable);
-end
-
-function l_debug:add_break_point_by_info(file_name, line_no, benable)
-    if type(file_name) ~= "string" then
-        return 0;
-    end
-
-    benable = benable or 1;
-
-    file_name = self:get_real_path(file_name);
-    local t_index = self.map[file_name];
-	local info = {};
-    if not t_index or not t_index[line_no] then
-		t_index = t_index or {};
-		info.sfile = file_name;
-		info.nline = line_no;
-		info.enable = 0;
-		self.count = self.count + 1;
-		t_index[info.nline] = self.count;
-		self.map[info.sfile] = t_index;
-		self.list[self.count] = info;
-	else
-		local index = t_index[line_no]
-		info = self.list[index];
-    end
-
-    self:_set_enable(info, benable);
-    
-    local sinfo = sformat("add break point:\n%s:%s\n", info.sfile, info.nline);
-    self.fwrite(sinfo, self.WRITE_INFOR);
+function l_debug:set_mode(smode)
+    self.mode = smode or self.DEBUG_MODE_RUN;
+    local sinfo = sformat("debug mode change to: %s", self.mode);
+    self:fwrite(sinfo);
     return 1;
 end
 
-function l_debug:clear_break_point(file_name)
-    if type(file_name) ~= "string" then
-        return;
-    end
-
-    file_name = self:get_real_path(file_name);
-    local t_index = self.map[file_name];
-    if not t_index then
-        return;
-    end
-
-    for line_no, index in pairs(t_index) do 
-        local info = self.list[index];
-        if info then
-            self:_set_enable(info, 0);
-        end
-    end
+function l_debug:unhook()
+    dsethook();
 end
 
-function l_debug:del_break_point(index)
-    return self:set_enable(index, 0);
+function l_debug:set_hook_c()
+	self:reset_state();
+	dsethook(self.hook_c, "c");
 end
 
-function l_debug:show_break_point()
-    local t_list = {};
-    for i = 1, self.count do 
-        local info = self.list[i];
-        if info then
-            local sinfo = sformat("%s:%s  enable=%s", info.sfile, info.nline, info.enable);
-            t_list[#t_list + 1] = sinfo;
-        end
-    end
-    local slist = (t_list[1] and  tconcat(t_list, "\n")) or "no break point.\n";
-    self.fwrite(slist.."\n", self.WRITE_INFOR);
+function l_debug:set_hook_crl()
+	dsethook(self.hook_crl, "crl");
 end
 
-function l_debug:set_enable(index, benalbe)
-    local info = self.list[index];
-    if not info then
-        local sinfo = "break point don`t exist.\n"
-        self.fwrite(sinfo, self.WRITE_INFOR);
-        return 0;
-    end
-    return self:_set_enable(info, benalbe);
+function l_debug:set_hook_cr()
+	dsethook(self.hook_cr, "cr");
 end
 
-function l_debug:_set_enable(info, benable)
-    benable = benable or 0;
-    
-	if info.enable ~= benable then
-		if benable == 0 then
-			if self.match.n_line == info.nline then
-				self.match.s_file = "";
-				self.match.n_begin = 0;
-				self.match.n_line = 0;
-				self.match.n_end = 0;
-				self.match.n_index = 0;
-				self.match.b_break = 0;
+function l_debug:add_break_point(path, line)
+	if type(path) ~= "string" or type(line) ~= "number" then
+		return;
+	end
+
+	local info = self.map[path];
+	if not info then
+		info = {};
+		self.map[path] = info;
+		self.count = self.count + 1;
+	end
+
+	if not info[line] or info[line] ~= 1 then
+		info[line] = 1;
+		self.enable_count = self.enable_count + 1;
+	end
+	
+	if self.enable_count > 0 and not dgethook() then
+		self:set_hook_c();
+	end
+end
+
+function l_debug:clear_break_point(path, reset_count)
+	if type(path) ~= "string" then
+		return;
+	end
+	reset_count = reset_count or 0;
+	local info = self.map[path];
+	if not info then
+		return;
+	end
+
+	self.map[path] = nil
+
+	for line_no, enable in pairs(info) do 
+		if enable == 1 then
+			self.enable_count = self.enable_count - 1;
+		end
+		self.count = self.count - 1;
+	end
+
+	if self.enable_count < 1 and reset_count == 0 and dgethook() then
+		self:unhook();
+	end
+end
+
+function l_debug:del_break_point(path, line)
+	if type(path) ~= "string" or type(line) ~= "number" then
+		return;
+	end
+
+	local info = self.map[path];
+	if not info then
+		return;
+	end
+
+	if not info[line] then
+		return;
+	end
+
+	if info[line] == 1 then
+		self.enable_count = self.enable_count -1;
+	end
+
+	self.count = self.count - 1;
+
+	if self.enable_count < 1 and dgethook() then
+		self:unhook();
+	end
+end
+
+function l_debug:disable_break_point(path, line)
+	if type(path) ~= "string" or type(line) ~= "number" then
+		return;
+	end
+
+	local info = self.map[path];
+	if not info then
+		return;
+	end
+
+	if not info[line] then
+		return;
+	end
+
+	if info[line] == 1 then
+		self.enable_count = self.enable_count - 1;
+	end
+
+	if self.enable_count < 1 and dgethook() then
+		self:unhook();
+	end
+end
+
+function l_debug:enable_break_point(path, line)
+	if type(path) ~= "string" or type(line) ~= "number" then
+		return;
+	end
+
+	local info = self.map[path];
+	if not info then
+		return;
+	end
+
+	if not info[line] then
+		return;
+	end
+
+	if info[line] ~= 1 then
+		info[line] = 1;
+		self.enable_count = self.enable_count + 1;
+	end
+
+	if self.enable_count > 0 and not dgethook() then
+		self:set_hook_c();
+	end
+end
+local g_count = 0;
+function l_debug:test_break_point(path, line, start_line, end_line)
+	local b_file, b_func, b_line  = false, false, false;
+	local info = self.map[path]
+	if info then
+		b_file = true;
+		if info[line] and info[line] == 1 then
+			b_func = true;
+			b_line = true;
+		elseif type(start_line) == "number" and type(end_line) == "number" then
+			if start_line == 304 and g_count < 16 then
+				g_count = g_count + 1;
+				-- print(1111, path, line, start_line, end_line);
+				-- print(2222, l_debug.enable_count, debug.gethook())
 			end
-			self.enable_count = self.enable_count -1;
-			if info.enable ~= benable and self.enable_count <= 0 and gethook() then
-				self.enable_count = 0;
-				self:unhook();
-			end
-		else
-			self.enable_count = self.enable_count + 1;
-			if self.enable_count > 0 and not gethook() then
-				self:set_hook_c();
+			for line_no, enable in pairs(info) do 
+				if line_no > start_line and line_no < end_line and enable == 1 then
+					b_func = true;
+					break;
+				end
 			end
 		end
-    end
-
-	info.enable = benable;
-    local sinfo = "break point set: enable = "..benable..'\n';
-    self.fwrite(sinfo, self.WRITE_INFOR);  
-    return 1;
+	end
+	return b_file, b_func, b_line;
 end
 
-function l_debug:set_mode(smode)
-    self.mode = smode or self.DEBUG_MODE_NEXT;
-    local sinfo = sformat("debug mode change to: %s", self.mode);
-    self.fwrite(sinfo..'\n', self.WRITE_INFOR);
-    return 1;
+
+function l_debug:updatestackinfo(nlevel)
+	nlevel = nlevel or 2;
+	nlevel = nlevel + 1;
+	local e = 1;
+	self.straceback = dtraceback("stack", nlevel);
+	local func = dgetinfo(nlevel, "f").func;
+	local index = 1;
+	self.tvariables = nil;
+	local name, val;
+	-- local count = 1;
+	-- repeat
+		-- name, val = dgetupvalue(func, count)
+		-- count = count + 1;
+		-- if name then
+			-- local stype = type(val);
+			-- local _type = "string"
+			-- if stype == "table" then
+				-- _type = "object";
+			-- elseif stype == "number" or stype == "string" then
+				-- _type = "float";
+				-- _val = tostring(val);--self:copy_no_loop(val);
+				-- self.tvariables = self.tvariables or {}
+				-- self.tvariables[index] = {name = name, value = _val, jstype = _type, luatype = "upvalue"};
+				-- index = index + 1;
+			-- elseif stype == "nil" then
+				-- val = "nil";
+			-- end
+		-- end
+	-- until not name
+	
+	local count = 1;
+	repeat
+		name, val = dgetlocal(nlevel, count)
+		count = count + 1;
+		if name then
+			local stype = type(val);
+			local _type = "string"
+			if stype == "table" then
+				_type = "object";
+			elseif stype == "number" then
+				_type = "float";
+				_val = tostring(val);--self:copy_no_loop(val);
+				self.tvariables = self.tvariables or {}
+				self.tvariables[index] = {name = name, value = _val, jstype = _type, luatype = "local"};
+				index = index + 1;
+			elseif stype == "string" then
+				_val = tostring(val);--self:copy_no_loop(val);
+				self.tvariables = self.tvariables or {}
+				self.tvariables[index] = {name = name, value = _val, jstype = _type, luatype = "local"};
+				index = index + 1;
+			elseif stype == "nil" then
+				val = "nil";
+			end
+		end
+	until not name
 end
 
-function l_debug:find_index(ssource, nlinedefined, nlastlinedefined)
-    if type(ssource) ~= "string" then
-        return nil;
-    end
-
-    ssource = self:get_real_path(ssource);
-    local t_index = self.map[ssource];
-	if type(t_index) ~= "table" then
-		return nil;
-    end
-
-    for line_no, index in pairs(t_index) do 
-        if line_no >= nlinedefined and line_no <= nlastlinedefined then
-            return index;
-        end
-    end
-
-    return nil;
-end
-
-function l_debug.hook_c(cmd)
+function l_debug.hook_c(scmd)
     local self = l_debug;
+	-- local cmd = self.CMD_2_HOOK[scmd];
 	local info = dgetinfo(2, "S");
 	local s_source = info["source"];
 	local s_what = info["what"];
@@ -256,168 +357,122 @@ function l_debug.hook_c(cmd)
     
     if s_what ~= "Lua" then
         return;
-    end
-
-    -- local sinfo = sformat("[%s|%s]%s:%s\n", s_what, cmd, s_source, n_linedefined);
-    -- self.fwrite(sinfo, self.WRITE_INFOR);
-    local index = self:find_index(s_source, n_linedefined, n_lastlinedefined);
-	if type(index) ~= "number" then
-		return;
-    end
-    
-    local info = self.list[index];
-    if not info then
-        return;
-    end
-
-	if info.enable == 1 then
-		self.match.s_file = info.path;
-		self.match.n_begin = n_linedefined;
-		self.match.n_line = info.nline;
-        self.match.n_end = n_lastlinedefined;
-        self.match.n_index = index;
-        self.match.b_break = 0;
-        self:set_mode(self.DEBUG_MODE_NEXT);
+	end
+	
+	local path = self:get_real_path(s_source);
+	local b_file, b_func = self:test_break_point(path, nil, n_linedefined, n_lastlinedefined);
+	if b_func then
 		self:set_hook_crl();
 	end
 end
 
-function l_debug:set_hook_c()
-    dsethook(self.hook_c, "c");
-end
+function l_debug.hook_crl(scmd, line)
+	local self = l_debug;
+	local cmd = self.CMD_2_HOOK[scmd];
+	local info = dgetinfo(2, "Sl");
+	local n_currentline = info["currentline"];
+	local n_linedefined = info["linedefined"];
+    local n_lastlinedefined = info["lastlinedefined"];
+	local s_what = info["what"] or "";
+    if s_what ~= "Lua" and s_what ~= "main" then
+        return;
+	end
+	
+	local s_source = info["source"];
+	local path = self:get_real_path(s_source);
+	local b_file, b_func, b_line = self:test_break_point(path, n_currentline, n_linedefined, n_lastlinedefined);
+	if cmd == self.HOOK_CMD_CALL then
+		self.call_deep = self.call_deep or 0;
+		self.call_deep = self.call_deep + 1;
 
-function l_debug.hook_crl(cmd, line)
-    local self = l_debug;
-    if self.mode == self.DEBUG_MODE_RUN then
-        ldb_mrg:set_msg_cach("next", nil);
-        self:set_hook_c();
-        return;
-    elseif cmd == "call" and self.mode == self.DEBUG_MODE_NEXT then
-        self:set_hook_r();
-        return;
-	elseif cmd == "call" and self.mode == self.DEBUG_MODE_STEP then
-        self:set_mode(self.DEBUG_MODE_NEXT);
+		if not b_func and self.mode ~= self.DEBUG_MODE_STEP_IN then
+			self:set_hook_cr();
+		end
+		return;
+	elseif cmd == self.HOOK_CMD_TAIL_CALL then
+		if not b_func and self.mode ~= self.DEBUG_MODE_STEP_IN then
+			self:set_hook_cr();
+		end
+		return;
+	elseif cmd == self.HOOK_CMD_RET then
+		self.call_deep = self.call_deep or 0;
+		self.call_deep = self.call_deep - 1;
 		return;
 	end
 
-	local info = dgetinfo(2, "Sln");
+	if self.mode == self.DEBUG_MODE_STEP_IN then
+		self.mode = self.DEBUG_MODE_NEXT;
+	end
+
+	if not b_func and  self.mode == self.DEBUG_MODE_RUN then
+		if self.call_deep < 1 then
+			self:set_hook_c();
+		else
+			self:set_hook_cr();
+		end
+		return;
+	end
+
+	-- if mode is next  or find a break then stop
+	if (b_func and self.mode == self.DEBUG_MODE_NEXT) or b_line then
+		-- local sinfo = string.format("[%s|%s]%s:%s", s_what, cmd, s_source or "nil", n_currentline or "nil");
+		-- self:fwrite(sinfo);
+		-- wait for command
+		if b_line then
+			ldb_mrg:send_match_break_point(path, n_currentline);
+		end
+		self.mode = self.DEBUG_MODE_WAIT;
+		self:updatestackinfo(2);
+		local tparam = {};
+		tparam.path = path;
+		tparam.line = n_currentline;
+		ldb_mrg:send_next_cach(tparam);
+		ldb_mrg:send_step_in_cach(tparam);
+		while (self.mode == self.DEBUG_MODE_WAIT) do 
+			ldb_mrg:on_tick(self.DEBUG_MODE_WAIT);
+			ldb_mrg:sleep(100);
+		end
+		return;
+	end
+end
+
+function l_debug.hook_cr(scmd)
+    local self = l_debug;
+	local cmd = self.CMD_2_HOOK[scmd];
+	local info = dgetinfo(2, "S");
 	local s_source = info["source"];
-	local s_what = info["what"] or "";
-	local s_currentline = info["currentline"];
-	local s_name = info["name"];
+	local s_what = info["what"];
 	local n_linedefined = info["linedefined"];
     local n_lastlinedefined = info["lastlinedefined"];
     if s_what ~= "Lua" and s_what ~= "main" then
         return;
-    end
-
-    s_source = self:get_real_path(s_source);
-    if self.match.b_break == 0 then
-        if s_currentline == self.match.n_line and 
-            n_linedefined == self.match.n_begin and 
-                n_lastlinedefined == self.match.n_end then
-            -- match break
-			self.match.b_break = 1;
-            ldb_mrg:send_match_break_point(s_source, s_currentline);
-		else
-			return;
-        end
-    end
-    self:set_mode(self.DEBUG_MODE_NEXT);
-    
-	if s_what == "Lua" and cmd == "line" then
-		ldb_mrg:updatestackinfo(2)
-		
-		local tparam = {};
-		tparam.path = s_source;
-		tparam.line = s_currentline;
-		ldb_mrg:send_next_cach(tparam);
-		
-		self.mode = self.DEBUG_MODE_WAIT;
-		while self.mode == self.DEBUG_MODE_WAIT do 
-			ldb_mrg:on_tick(self.DEBUG_MODE_WAIT);
-			ldb_mrg:sleep(100);
+	end
+	
+	
+	-- print(9999, scmd, s_source, s_what, n_linedefined, self.call_deep)
+	if cmd == self.HOOK_CMD_CALL then
+		self.call_deep = self.call_deep or 0;
+		self.call_deep = self.call_deep + 1;
+		local path = self:get_real_path(s_source);
+		local b_file, b_func, b_line = self:test_break_point(path, nil, n_linedefined, n_lastlinedefined);
+		if b_func then
+			self:set_hook_crl();
 		end
-	end
-
-
-
-    if cmd == "line" and line ~= n_lastlinedefined and s_source == self.match.s_file then
-        local sinfo = sformat("[%s|%s]%s:%s in %s()\n", s_what, cmd, s_source or "nil", s_currentline or "nil", s_name or "nil");
-        self.fwrite(sinfo, self.WRITE_INFOR);
-    end
-
-    if cmd == "return" and s_source == self.match.s_file and 
-            self.match.n_line >= n_linedefined and
-                self.match.n_line <= n_lastlinedefined then
-        self.match.s_file = "";
-        self.match.n_begin = 0;
-        self.match.n_line = 0;
-        self.match.n_end = 0;
-        self.match.n_index = 0;
-        self.match.b_break = 0;
-        self:set_hook_c();
-    end
-
-end
-
-function l_debug:set_hook_crl()
-    dsethook(self.hook_crl, "crl");
-end
-
-function l_debug.hook_cr(cmd)
-    local self = l_debug;
-    self:set_mode(self.DEBUG_MODE_NEXT);
-	local info = dgetinfo(2, "S");
-	-- local info = dgetinfo(2, "Sl");
-	local s_source = info["source"];
-	-- local s_what = info["what"];
-	-- local n_currentline = info["currentline"];
-	-- if s_what ~= "Lua" then
-		-- return;
-    -- end
-    
-    -- local sinfo = sformat("[%s|%s]%s:%s\n", s_what, cmd, s_source, n_currentline);
-    -- self.fwrite(sinfo, self.WRITE_INFOR);
-	self.n_current_return = self.n_current_return or 1;
-	if cmd == "call" then
-		self.n_current_return = self.n_current_return + 1;
-	elseif cmd == "return" then
-		self.n_current_return = self.n_current_return - 1;
-	end
-	if self.n_current_return <= 0 then
-		self.n_current_return = 1;
+		return;
+	elseif cmd == self.HOOK_CMD_TAIL_CALL then
+		local path = self:get_real_path(s_source);
+		local b_file, b_func, b_line = self:test_break_point(path, nil, n_linedefined, n_lastlinedefined);
+		if b_func then
+			self:set_hook_crl();
+		end
+		return;
+	else
+		self.call_deep = self.call_deep or 0;
+		self.call_deep = self.call_deep - 1;
 		self:set_hook_crl();
 		return;
 	end
 end
-
-function l_debug:set_hook_r()
-    dsethook(self.hook_cr, "cr");
-end
-
-function l_debug:unhook()
-    debug.sethook();
-end
-
--- l_debug:get_break_info("E:\\github\\Lengineset\\project\\test\\lua\\script\\test.lua : 17     ")
-function l_debug:get_break_info(sbreak)
-    local _, _, file_name, l = sfind(sbreak, "(%w+.*%.%w+)%s*:%s*(%d+)%s*");
-    if not file_name then
-        return nil, "invalid in put.\n";
-    end
-    local line = tonumber(l);
-    if not line then
-        return nil, "line num error.\n";
-    end
-    local info = {}
-    file_name = self:get_real_path(file_name);
-    info.sfile = file_name;
-    info.nline = line;
-    info.enable = 1;
-    return info;
-end
-
 -- l_debug:init();
 -- l_debug:release();
 

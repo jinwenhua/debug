@@ -260,7 +260,9 @@ void DebugServer::StartRecv()
 			{
 				
 				if (this->m_nPing-- < 0)
-					this->Dettach();	// 失去链接
+				{
+					this->Detach();	// 失去链接
+				}
 				else
 					this->Send(sping);  // ping
 			}
@@ -343,7 +345,7 @@ int DebugServer::_Recv(std::string& msg)
 		else if (cnt == 0)
 		{
 			// 断开连接，接受线程继续等待连接
-			Dettach();
+			Detach();
 		}
 	}
     return nRet;
@@ -381,7 +383,7 @@ int DebugServer::InitServer()
     return nRet;
 }
 
-int DebugServer::Dettach()
+int DebugServer::Detach()
 {
     int nRet = 0;
     if (m_nSocketClient >= 0)
@@ -389,6 +391,13 @@ int DebugServer::Dettach()
         ::closesocket(m_nSocketClient);
         m_nSocketClient = INVALID_SOCKET;
         SetRunState(DBG_RUN_STATE::DBG_DETACH);
+		nlohmann::json stjson;
+		stjson["command"] = "detached";
+		stjson["seq"] = 0;
+		stjson["type"] = "request";
+		std::string sping = stjson.dump();
+		std::lock_guard<std::mutex> lck(m_mtxRecv);
+		m_qRecv.push(sping);
 		printf("debug> connection is broken.\n");
         nRet = 1;
     }
@@ -486,9 +495,9 @@ int DebugServerWrapper::Recv(lua_State* L)
     return nRet;
 }
 
-int DebugServerWrapper::Dettach(lua_State* L)
+int DebugServerWrapper::Detach(lua_State* L)
 {	
-	superclass::Dettach();
+	superclass::Detach();
 	return 0;
 }
 
@@ -531,7 +540,7 @@ L_REG_TYPE(DebugServerWrapper) DebugServerWrapper::Functions[] =
     {"StoprServer", &DebugServerWrapper::StoprServer},
     {"Send", &DebugServerWrapper::Send},
 	{"Revc", &DebugServerWrapper::Recv},
-	{"Dettach", &DebugServerWrapper::Dettach},
+	{"Detach", &DebugServerWrapper::Detach},
 	{"ReadCmd", &DebugServerWrapper::ReadCmd},
 	{"StartConsole", &DebugServerWrapper::StartConsole},
 	{"StopConsole", &DebugServerWrapper::StopConsole },

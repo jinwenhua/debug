@@ -199,7 +199,7 @@ function PathList:MinPPoint()
 			min_f = f;
 		end
 	end
-		
+	
 	return min_path_point;
 end
 
