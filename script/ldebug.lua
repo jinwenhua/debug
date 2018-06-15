@@ -83,6 +83,7 @@ function l_debug:_init()
     self.match.b_break = 0;
     self.wokingpath = "";
 	self.call_deep = 0;
+	self.step_in_deep = -1;
 end
 
 function l_debug:release()
@@ -101,6 +102,7 @@ function l_debug:reset_state()
     self.match.n_index = 0;
     self.match.b_break = 0;
 	self.call_deep = 0;
+	self.step_in_deep = -1;
 end
 
 function l_debug:set_io_fuc(fwrite, freadline)
@@ -288,6 +290,53 @@ function l_debug:test_break_point(path, line, start_line, end_line)
 	return b_file, b_func, b_line;
 end
 
+function l_debug:get_stack_info()
+	return self.straceback or "";
+end
+
+function l_debug:get_upvalue_info()
+	return self.tvariables_upvalue or {};
+end
+
+function l_debug:get_local_info()
+	return self.tvariables_local or {};
+end
+
+function l_debug:update_statck_info(nlevel)
+	nlevel = nlevel or 2;
+	nlevel = nlevel + 1;
+	-- save stack trace
+	self.straceback = dtraceback("stack", nlevel);
+
+	-- save upvalue veriables
+	local func = dgetinfo(nlevel, "f").func;
+	local index = 1;
+	local tvariables = {};
+	self.tvariables_upvalue = tvariables;
+	local name, val;
+	local count = 1;
+	repeat
+		name, val = dgetupvalue(func, count)
+		count = count + 1;
+		if name then
+			tvariables[name] = val;
+		end
+	until not name
+	
+	-- save local variables
+	local count = 1;
+	local tvariables = {};
+	self.tvariables_local = tvariables;
+	repeat
+		name, val = dgetlocal(nlevel, count)
+		count = count + 1;
+		if name then
+			tvariables[name] = val;
+		end
+	until not name
+
+	local count = 1;
+end
 
 function l_debug:updatestackinfo(nlevel)
 	nlevel = nlevel or 2;
@@ -382,26 +431,27 @@ function l_debug.hook_crl(scmd, line)
 	local path = self:get_real_path(s_source);
 	local b_file, b_func, b_line = self:test_break_point(path, n_currentline, n_linedefined, n_lastlinedefined);
 	if cmd == self.HOOK_CMD_CALL then
-		self.call_deep = self.call_deep or 0;
 		self.call_deep = self.call_deep + 1;
+		if self.mode == self.DEBUG_MODE_STEP_IN then
+			self.step_in_deep = self.call_deep;
+		end
 
 		if not b_func and self.mode ~= self.DEBUG_MODE_STEP_IN then
 			self:set_hook_cr();
 		end
+		
 		return;
 	elseif cmd == self.HOOK_CMD_TAIL_CALL then
+		if self.step_in_deep >= 0 and self.step_in_deep == self.call_deep then
+			self.step_in_deep = self.step_in_deep - 1;
+		end
 		if not b_func and self.mode ~= self.DEBUG_MODE_STEP_IN then
 			self:set_hook_cr();
 		end
 		return;
 	elseif cmd == self.HOOK_CMD_RET then
-		self.call_deep = self.call_deep or 0;
 		self.call_deep = self.call_deep - 1;
 		return;
-	end
-
-	if self.mode == self.DEBUG_MODE_STEP_IN then
-		self.mode = self.DEBUG_MODE_NEXT;
 	end
 
 	if not b_func and  self.mode == self.DEBUG_MODE_RUN then
@@ -412,17 +462,21 @@ function l_debug.hook_crl(scmd, line)
 		end
 		return;
 	end
-
+	
 	-- if mode is next  or find a break then stop
-	if (b_func and self.mode == self.DEBUG_MODE_NEXT) or b_line then
-		-- local sinfo = string.format("[%s|%s]%s:%s", s_what, cmd, s_source or "nil", n_currentline or "nil");
+	if (b_func and self.mode == self.DEBUG_MODE_NEXT) or 
+		(self.step_in_deep > 0 and self.step_in_deep >= self.call_deep) or
+			b_line then
+		local sinfo = string.format("[%s|%s]%s:%s", s_what, cmd, s_source or "nil", n_currentline or "nil");
+		print("debug>", sinfo)
 		-- self:fwrite(sinfo);
 		-- wait for command
 		if b_line then
 			ldb_mrg:send_match_break_point(path, n_currentline);
 		end
+		self.step_in_deep = self.call_deep;
 		self.mode = self.DEBUG_MODE_WAIT;
-		self:updatestackinfo(2);
+		self:update_statck_info(2);
 		local tparam = {};
 		tparam.path = path;
 		tparam.line = n_currentline;
@@ -451,7 +505,6 @@ function l_debug.hook_cr(scmd)
 	
 	-- print(9999, scmd, s_source, s_what, n_linedefined, self.call_deep)
 	if cmd == self.HOOK_CMD_CALL then
-		self.call_deep = self.call_deep or 0;
 		self.call_deep = self.call_deep + 1;
 		local path = self:get_real_path(s_source);
 		local b_file, b_func, b_line = self:test_break_point(path, nil, n_linedefined, n_lastlinedefined);
@@ -460,6 +513,9 @@ function l_debug.hook_cr(scmd)
 		end
 		return;
 	elseif cmd == self.HOOK_CMD_TAIL_CALL then
+		if self.step_in_deep >= 0 and self.step_in_deep == self.call_deep then
+			self.step_in_deep = self.step_in_deep - 1;
+		end
 		local path = self:get_real_path(s_source);
 		local b_file, b_func, b_line = self:test_break_point(path, nil, n_linedefined, n_lastlinedefined);
 		if b_func then
@@ -467,7 +523,6 @@ function l_debug.hook_cr(scmd)
 		end
 		return;
 	else
-		self.call_deep = self.call_deep or 0;
 		self.call_deep = self.call_deep - 1;
 		self:set_hook_crl();
 		return;

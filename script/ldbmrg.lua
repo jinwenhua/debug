@@ -30,6 +30,8 @@ l_debug = l_debug or require("ldebug");
 ldb_json = ldb_json or require("json");
 ldb_mrg = ldb_mrg or {};
 
+ldb_mrg.workingpath = "e:\\github\\vscode-l-debug\\";
+
 function ldb_mrg:on_tick(mode)
 	if not mode and l_debug.mode == l_debug.DEBUG_MODE_WAIT then
 		return;
@@ -48,6 +50,11 @@ function ldb_mrg:init(port, bconsole)
 	if bconsole == 1 then
 		l_dbg:StartConsole();
 	end
+	
+	local info = dgetinfo(1, "S");
+	local s_source = info["source"];
+	local _, _, file_name = sfind(s_source, ".*\\(.*)");
+	self.this_file_name = file_name;
 end
 
 function ldb_mrg:run()
@@ -130,6 +137,88 @@ function ldb_mrg:copy_no_loop(value, max_deep, max_count)
     return v_copy;
 end
 
+function ldb_mrg:ldb_split(src, delim)
+	src = src or '';
+	delim = delim or '%s';
+	local tlist = {};
+	local count = 0;
+	for line in sgmatch(src, "([^"..delim.."]+)") do
+		-- print(111, line)
+		count = count + 1;
+		tlist[count] = line;
+	end
+	return tlist;
+end
+
+function ldb_mrg:get_stack_trace()
+	local straceback = l_debug:get_stack_info();
+
+	local tlist = self:ldb_split(straceback, "%c");
+	
+	local count = 0;
+	local tstackframes = {};
+	local tbody = {};
+	for _, sline in ipairs(tlist) do 
+		local _, _, path, snum, sfunc = sfind(sline, "(%w.*%w+):(%d+): in (.*)");
+		if path and snum and sfunc then
+			local _, _, name = sfind(path, "(%w+.lua)");
+			name = name or path;
+			if self.this_file_name ~= name then
+				-- print(path, name, snum, sfunc);
+				path = slower(path);
+				local tsource = {};
+				tsource["path"] = self.workingpath..path;
+				tsource["name"] = name;
+				tsource["sourceReference"] = 0;
+				tsource["adapterData"] = "mock-adapter-data";
+				local info = {};
+				info["id"] = count;
+				info["source"] = tsource;
+				info["line"] = tonumber(snum);
+				info["name"] = sfunc;
+				info["column"] = 0;
+				count = count + 1;
+				tstackframes[count] = info;
+			end
+		end
+	end
+	
+	tbody["stackFrames"] = tstackframes;
+	tbody["totalFrames"] = count;
+	
+	return tbody;
+end
+
+function ldb_mrg:_get_veriables(tget, tvariables)
+	local count = 0;
+	for name, value in pairs(tvariables) do 
+		local tinfo = {};
+		local stype = type(value);
+		if stype == "string" then
+			tinfo["type"] = "string";
+		elseif stype == "number" then
+			tinfo["type"] = "float";
+		end
+		if tinfo["type"] then
+			count = count + 1;
+			tinfo["name"] = name;
+			tinfo["value"] = tostring(value);
+			tinfo["variablesReference"] = 0;
+			tget[count] = tinfo;
+		end
+	end
+	return tget;
+end
+
+function ldb_mrg:get_veriables()
+	local tupvalues = l_debug:get_upvalue_info();
+	local tlocals = l_debug:get_local_info();
+	local tbody = {};
+	tbody["variables"] = {};
+	self:_get_veriables(tbody["variables"], tupvalues);
+	self:_get_veriables(tbody["variables"], tlocals);
+	return tbody;
+end
 
 function ldb_mrg:encode(t_msg)
 	local ok, msg = self:pcall(ldb_json.encode, t_msg);
@@ -314,7 +403,9 @@ end
 ldb_mrg:add_msg_handler("step_in", ldb_mrg.msg_on_step_in);
 
 function ldb_mrg:msg_on_stack(t_msg, msg)
-	t_msg["body"] = l_debug.straceback;
+	t_msg["arguments"] = t_msg["arguments"] or {};
+	t_msg["arguments"]["body"] = self:get_stack_trace();
+	-- t_msg["body"] = l_debug:get_stack_info();
 	local s_msg = self:encode(t_msg);
 	if s_msg then
 		l_dbg:Send(s_msg);
@@ -323,7 +414,8 @@ end
 ldb_mrg:add_msg_handler("stack", ldb_mrg.msg_on_stack);
 
 function ldb_mrg:msg_on_variables(t_msg, msg)
-	t_msg["body"] = l_debug.tvariables;
+	t_msg["arguments"] = t_msg["arguments"] or {};
+	t_msg["arguments"]["body"] = self:get_veriables();
 	local s_msg = self:encode(t_msg);
 	if type(s_msg) == "string" then
 		l_dbg:Send(s_msg);
@@ -352,25 +444,25 @@ function ldb_mrg:msg_on_setbreakpoints(t_msg, msg)
 end
 ldb_mrg:add_msg_handler("setbreakpoints", ldb_mrg.msg_on_setbreakpoints);
 
-function ldb_mrg:msg_on_hover(t_msg, msg)
-	local t_body = t_msg["body"] or {};
-	local var_name = t_body["name"];
-	local sfunc = sformat([[return %s]], var_name);
-	local fun = load(sfunc);
-	if type(fun) == "function" then
-		local ok, var = self:pcall(fun);
-		if ok then
-			t_msg["body"] = t_body;
-			var = self:copy_no_loop(var);
-			t_body["value"] = var;
+function ldb_mrg:msg_on_evaluate(t_msg, msg)
+	local targuments = t_msg["arguments"] or {};
+	local targs = targuments["args"];
+	if targs then
+		if targs["context"] == "hover" then
+			local sveriable = targs["expression"];
+			local tbody = {};
+			tbody["result"] = sveriable..": hi world!";
+			tbody["type"] = "string";
+			tbody["variablesReference"] = 0;
+			targuments["body"] = tbody;
 			local s_msg = self:encode(t_msg);
-			if s_msg then
+			if type(s_msg) == "string" then
 				l_dbg:Send(s_msg);
 			end
 		end
 	end
 end
-ldb_mrg:add_msg_handler("hover", ldb_mrg.msg_on_hover);
+ldb_mrg:add_msg_handler("evaluate", ldb_mrg.msg_on_evaluate);
 
 function ldb_mrg:msg_on_detach(t_msg, msg)
 	l_dbg:Detach();
