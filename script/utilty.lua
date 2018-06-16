@@ -59,6 +59,13 @@ function l_utily:win_style_path(file_path)
 	return file_path;
 end
 
+function l_utily:sub_working_path(path, workingPath)
+	path = self:win_style_path(path);
+	local nlen = strlen(workingPath);
+	path = ssub(path, nlen + 1);
+	return path;
+end
+
 function l_utily:encode(t_msg)
 	local ok, msg = self:pcall(ldb_json.encode, t_msg);
 	if ok and type(msg) == "string" then

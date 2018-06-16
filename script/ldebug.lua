@@ -71,8 +71,9 @@ end
 function l_debug:_init()
     self._fwrite = nil;
     self._freadline = nil;
-    self.map = {};
-    self.wokingpath = "";
+	self.map = {};
+	self.id_info = {};
+    self.workingPath = "";
     self.count = 0;
     self.enable_count = 0;
 	self:reset_state();
@@ -96,9 +97,9 @@ function l_debug:set_io_fuc(fwrite, freadline)
     self._freadline = freadline;
 end
 
-function l_debug:set_workingpath(wokingpath)
-    wokingpath = wokingpath or "";
-    self.wokingpath = sgsub(slower(wokingpath), "/", "\\");
+function l_debug:set_workingPath(workingPath)
+    workingPath = workingPath or "";
+    self.workingPath = sgsub(slower(workingPath), "/", "\\");
 end
 
 function l_debug:get_real_path(file_path)
@@ -150,9 +151,52 @@ function l_debug:add_break_point(path, line)
 		self.enable_count = self.enable_count + 1;
 	end
 	
+	self.id_info[path] = self.id_info[path] or {};
+	local index = #(self.id_info[path]) + 1;
+	self.id_info[path][index] = line;
+
 	if self.enable_count > 0 and not dgethook() then
 		self:set_hook_c();
 	end
+end
+
+function l_debug:set_break_points(path, lines)
+	if type(path) ~= "string" or type(lines) ~= "table" then
+		return {};
+	end
+
+	local break_points = {};
+
+	local info = self.map[path];
+	if info then
+		for line, enable in pairs(info) do 
+			self.count = self.count - 1;
+			if enable == 1 then
+				self.enable_count = self.enable_count - 1;
+			end
+		end
+	end
+
+
+	info = {};
+	self.map[path] = info;
+	local count = 0;
+	for _, line in ipairs(lines) do 
+		info[line] = 1;
+		self.count = self.count + 1;
+		self.enable_count = self.enable_count + 1;
+		count = count + 1;
+		break_points[count] = line;
+	end
+	self.id_info[path] = break_points;
+
+	if self.enable_count > 0 and not dgethook() then
+		self:set_hook_c();
+	elseif self.enable_count < 1 then
+		self:unhook();
+	end
+
+	return break_points;
 end
 
 function l_debug:clear_break_point(path, reset_count)
@@ -165,8 +209,8 @@ function l_debug:clear_break_point(path, reset_count)
 		return;
 	end
 
-	self.map[path] = nil
-
+	self.map[path] = nil;
+	self.id_info[path] = nil;
 	for line_no, enable in pairs(info) do 
 		if enable == 1 then
 			self.enable_count = self.enable_count - 1;
@@ -198,6 +242,17 @@ function l_debug:del_break_point(path, line)
 	end
 
 	self.count = self.count - 1;
+	self.id_info[path] = self.id_info[path] or {};
+	local break_points = {};
+	local index = 0;
+	for id, line_no in ipairs(self.id_info[path]) do 
+		if line_no ~= line then
+			index = index + 1;
+			break_points[index] = line_no;
+		end
+	end
+
+	self.id_info[path] = break_points;
 
 	if self.enable_count < 1 and dgethook() then
 		self:unhook();

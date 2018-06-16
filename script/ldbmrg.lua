@@ -81,10 +81,10 @@ function ldb_mrg:stop()
 	l_dbg:StopConsole();
 	l_socket:terminated();
 	local tick = 0;
-	while tick <= 50 do
+	while tick <= 20 do
 		if mfmod(tick, 10) == 0 then
 			local second = mfloor(tick / 10);
-			print(sformat("debug> debug server exit in %s seconds.", 5 - second));
+			print(sformat("debug> debug server exit in %s seconds.", 2 - second));
 		end
 		tick = tick + 1;
 		self:on_tick();
@@ -94,6 +94,10 @@ end
 
 function ldb_mrg:add_break_point(file_name, line_no)
     l_debug:add_break_point(file_name, line_no);
+end
+
+function ldb_mrg:set_break_points(path, lines)
+	return l_debug:set_break_points(path, lines);
 end
 
 function ldb_mrg:send_match_break_point(file_name, line_no)
@@ -340,10 +344,12 @@ ldb_mrg:add_msg_handler("initialize", ldb_mrg.msg_on_initialize);
 function ldb_mrg:msg_on_attach(request, args)
 	local response = l_socket:response_form_request(request);
 	if args["workingPath"] then
-		workingPath = args["workingPath"];
+		local workingPath = args["workingPath"];
 		workingPath = l_utily:win_style_path(workingPath);
 		if ssub(workingPath, -1, -1) ~= '\\' then
 			self.workingPath = workingPath..'\\';
+		else
+			self.workingPath = workingPath;
 		end
 	end
 	l_socket:send_msg(response);
@@ -367,6 +373,28 @@ function ldb_mrg:msg_on_setExceptionBreakpoints(request, args)
 end
 ldb_mrg:add_msg_handler("setExceptionBreakpoints", ldb_mrg.msg_on_setExceptionBreakpoints);
 
+function ldb_mrg:msg_on_setBreakpoints(request, args)
+	local path = l_utily:sub_working_path(args.source.path, self.workingPath);
+	local lines = args.lines or {};
+	local break_points = self:set_break_points(path, lines);
+	local source = args.source;
+	local response = l_socket:response_form_request(request);
+	local body = {};
+	body.breakpoints = {};
+	local count = 0;
+	for _, line in ipairs(break_points) do 
+		count = count + 1;
+		local info = {};
+		info.line = line;
+		info.source = source;
+		info.verified = true;
+		body.breakpoints[count] = info;
+	end
+	response.body = body;
+
+	l_socket:send_msg(response);
+end
+ldb_mrg:add_msg_handler("setBreakpoints", ldb_mrg.msg_on_setBreakpoints);
 
 -- function ldb_mrg:msg_on_continue(t_msg, msg)
 	-- l_debug:set_mode(l_debug.DEBUG_MODE_RUN);
