@@ -79,17 +79,17 @@ function ldb_mrg:stop()
 	self:restart();
 	self.isrunning = false;
 	l_dbg:StopConsole();
-	-- l_socket:terminated();
-	-- local tick = 0;
-	-- while tick <= 50 do
-	-- 	if mfmod(tick, 10) == 0 then
-	-- 		local second = mfloor(tick / 10);
-	-- 		print(sformat("debug> debug server exit in %s seconds.", 5 - second));
-	-- 	end
-	-- 	tick = tick + 1;
-	-- 	self:on_tick();
-	-- 	self:sleep(100);
-	-- end
+	l_socket:terminated();
+	local tick = 0;
+	while tick <= 50 do
+		if mfmod(tick, 10) == 0 then
+			local second = mfloor(tick / 10);
+			print(sformat("debug> debug server exit in %s seconds.", 5 - second));
+		end
+		tick = tick + 1;
+		self:on_tick();
+		self:sleep(100);
+	end
 end
 
 function ldb_mrg:add_break_point(file_name, line_no)
@@ -360,6 +360,13 @@ function ldb_mrg:msg_on_disconnect(request, args)
 	end
 end
 ldb_mrg:add_msg_handler("disconnect", ldb_mrg.msg_on_disconnect);
+
+function ldb_mrg:msg_on_setExceptionBreakpoints(request, args)
+	local response = l_socket:response_form_request(request);
+	l_socket:send_msg(response);
+end
+ldb_mrg:add_msg_handler("setExceptionBreakpoints", ldb_mrg.msg_on_setExceptionBreakpoints);
+
 
 -- function ldb_mrg:msg_on_continue(t_msg, msg)
 	-- l_debug:set_mode(l_debug.DEBUG_MODE_RUN);

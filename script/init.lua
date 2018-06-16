@@ -21,7 +21,7 @@ function l_utily:get_working_path(nlevel)
 	local path = info.source or '';
 	path = ssub(path, 2, -1) -- delete "@"  
     local _, _, path = sfind(path, "^(.*)\\") -- the last "/" befor 
-    path = slower(path);
+    path = slower(path or "");
 	return path;
 end
 

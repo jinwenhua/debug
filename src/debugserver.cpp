@@ -301,7 +301,6 @@ int DebugServer::Send(std::string& msg)
     }
 	if (msg.length() > 0)
 	{
-		msg.append("&|&");
 		if(::send(m_nSocketClient, msg.c_str(), msg.length(), 0) > 0)
 		{
 			nRet = 1;
