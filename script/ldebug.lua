@@ -49,6 +49,7 @@ l_debug.CMD_2_HOOK =
 }
 
 function l_debug:init()
+	print("l_debug init.")
     self:_init();
     self:fwrite("l_debug init success.");
 end
@@ -68,41 +69,26 @@ function l_debug.freadline(...)
 end
 
 function l_debug:_init()
-    self._fwrite = iowrite;
-    self._freadline = iolines;
+    self._fwrite = nil;
+    self._freadline = nil;
     self.map = {};
-    self.match = {};
+    self.wokingpath = "";
     self.count = 0;
     self.enable_count = 0;
-    self.mode = self.DEBUG_MODE_RUN;
-    self.match.s_file = "";
-    self.match.n_begin = 0;
-    self.match.n_line = 0;
-    self.match.n_end = 0;
-    self.match.n_index = 0;
-    self.match.b_break = 0;
-    self.wokingpath = "";
-	self.call_deep = 0;
-	self.step_in_deep = -1;
-end
-
-function l_debug:release()
-    self:_init();
-    self.fwrite("debug> debug finish.\n");
-    self:unhook();
 	self:reset_state();
 end
 
 function l_debug:reset_state()
 	self.mode = self.DEBUG_MODE_RUN;
-    self.match.s_file = "";
-    self.match.n_begin = 0;
-    self.match.n_line = 0;
-    self.match.n_end = 0;
-    self.match.n_index = 0;
-    self.match.b_break = 0;
 	self.call_deep = 0;
 	self.step_in_deep = -1;
+end
+
+function l_debug:release()
+    self:unhook();
+    self:_init();
+	self:reset_state();
+    self.fwrite("debug> debug finish.\n");
 end
 
 function l_debug:set_io_fuc(fwrite, freadline)

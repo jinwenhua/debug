@@ -22,7 +22,8 @@ local dgetupvalue = debug.getupvalue;
 local dgetlocal = debug.getlocal;
 local tinsert = table.insert
 local tconcat = table.concat;
-local fxpcall = xpcall;
+local mfloor = math.floor;
+local mfmod = math.fmod;
 
 require("ldebugserver");
 l_dbg = l_dbg or DebugServer();
@@ -30,7 +31,7 @@ l_debug = l_debug or require("ldebug");
 ldb_json = ldb_json or require("json");
 ldb_mrg = ldb_mrg or {};
 
-ldb_mrg.workingpath = "e:\\github\\vscode-l-debug\\";
+ldb_mrg.workingPath = ldb_mrg.workingPath or "e:\\github\\vscode-l-debug\\";
 
 function ldb_mrg:on_tick(mode)
 	if not mode and l_debug.mode == l_debug.DEBUG_MODE_WAIT then
@@ -41,6 +42,7 @@ function ldb_mrg:on_tick(mode)
 end
 
 function ldb_mrg:init(port, bconsole)
+	print("ldb_mrg init.")
 	l_debug:set_io_fuc(nil, nil)
 
 	port = port or 8869;
@@ -55,6 +57,8 @@ function ldb_mrg:init(port, bconsole)
 	local s_source = info["source"];
 	local _, _, file_name = sfind(s_source, ".*\\(.*)");
 	self.this_file_name = file_name;
+	l_debug:init();
+	l_socket:init();
 end
 
 function ldb_mrg:run()
@@ -66,9 +70,26 @@ function ldb_mrg:run()
 	end
 end
 
+function ldb_mrg:restart()
+	l_debug:release();
+	l_socket:init();
+end
+
 function ldb_mrg:stop()
+	self:restart();
 	self.isrunning = false;
 	l_dbg:StopConsole();
+	-- l_socket:terminated();
+	-- local tick = 0;
+	-- while tick <= 50 do
+	-- 	if mfmod(tick, 10) == 0 then
+	-- 		local second = mfloor(tick / 10);
+	-- 		print(sformat("debug> debug server exit in %s seconds.", 5 - second));
+	-- 	end
+	-- 	tick = tick + 1;
+	-- 	self:on_tick();
+	-- 	self:sleep(100);
+	-- end
 end
 
 function ldb_mrg:add_break_point(file_name, line_no)
@@ -86,7 +107,7 @@ function ldb_mrg:send_match_break_point(file_name, line_no)
 	t_msg["point"] = {};
 	t_msg["point"].path = file_name;
 	t_msg["point"].line = line_no;
-	local msg = self:encode(t_msg);
+	local msg = l_utily:encode(t_msg);
 	if type(msg) == "string" then
 		l_dbg:Send(msg);
 	end
@@ -137,23 +158,10 @@ function ldb_mrg:copy_no_loop(value, max_deep, max_count)
     return v_copy;
 end
 
-function ldb_mrg:ldb_split(src, delim)
-	src = src or '';
-	delim = delim or '%s';
-	local tlist = {};
-	local count = 0;
-	for line in sgmatch(src, "([^"..delim.."]+)") do
-		-- print(111, line)
-		count = count + 1;
-		tlist[count] = line;
-	end
-	return tlist;
-end
-
 function ldb_mrg:get_stack_trace()
 	local straceback = l_debug:get_stack_info();
 
-	local tlist = self:ldb_split(straceback, "%c");
+	local tlist = l_utily:split(straceback, "%c");
 	
 	local count = 0;
 	local tstackframes = {};
@@ -167,7 +175,7 @@ function ldb_mrg:get_stack_trace()
 				-- print(path, name, snum, sfunc);
 				path = slower(path);
 				local tsource = {};
-				tsource["path"] = self.workingpath..path;
+				tsource["path"] = self.workingPath..path;
 				tsource["name"] = name;
 				tsource["sourceReference"] = 0;
 				tsource["adapterData"] = "mock-adapter-data";
@@ -220,32 +228,6 @@ function ldb_mrg:get_veriables()
 	return tbody;
 end
 
-function ldb_mrg:encode(t_msg)
-	local ok, msg = self:pcall(ldb_json.encode, t_msg);
-	if ok and type(msg) == "string" then
-		return msg;
-	end
-
-	return nil;
-end
-
-function ldb_mrg:decode(msg)
-	local ok, t_msg = self:pcall(ldb_json.decode, msg);
-	if ok and type(t_msg) == "table" then
-		return t_msg;
-	end
-
-	return nil;
-end
-
-function ldb_mrg:pcall(func, ...)
-    local errhander = function(e)
-        print("debug> error info: "  .. e);
-        print("debug> stack info: " .. dtraceback("current 2 stack: " ,2));
-    end
-
-    return fxpcall(func, errhander, ...);
-end
 --===================proccess client message========================================
 function ldb_mrg:add_io_handler(command, fhandler)
     self.io_handler_map = self.io_handler_map or {};
@@ -260,7 +242,7 @@ function ldb_mrg:proccess_io()
 			self.io_handler_map = self.io_handler_map or {};
 			local fhandler = self.io_handler_map[command];
 			if type(fhandler) == "function" then
-				ldb_mrg:pcall(fhandler, self, sparam);
+				l_utily:pcall(fhandler, self, sparam);
 			else
 				if l_debug.mode ~= l_debug.DEBUG_MODE_WAIT then
 					-- if not define command then dostring it
@@ -274,12 +256,17 @@ function ldb_mrg:proccess_io()
 end
 
 function ldb_mrg:io_on_dettach(sparam)
-    l_dbg:Dettach();
+    l_socket:disconnect()
 end
 ldb_mrg:add_io_handler("dettach", ldb_mrg.io_on_dettach);
 
+function ldb_mrg:io_on_detached(t_msg, msg)
+	self:restart();
+end
+ldb_mrg:add_io_handler("detached", ldb_mrg.io_on_detached);
+
 function ldb_mrg:io_on_close(sparam)
-	l_dbg:StopConsole();
+	self:stop();
 end
 ldb_mrg:add_io_handler("close", ldb_mrg.io_on_close);
 
@@ -295,7 +282,7 @@ ldb_mrg:add_io_handler("do", ldb_mrg.io_on_do);
 function ldb_mrg:io_on_default(sline)
 	local fun = load(sline);
 	if type(fun) == "function" then
-		ldb_mrg:pcall(fun);
+		l_utily:pcall(fun);
 	end
 end
 
@@ -317,161 +304,187 @@ function ldb_mrg:get_msg_cach(command)
 end
 
 function ldb_mrg:proccess_msg()
-	local msg = l_dbg:Revc();
-	if type(msg) == "string" then
-		local t_msg = self:decode(msg);
-		if t_msg and type(t_msg.command) == "string" then
-			-- if t_msg.command ~= "pong" then
-				-- print("debug>", msg)
-			-- end
-            self.msg_handler_map = self.msg_handler_map or {};
-            local fhandler = self.msg_handler_map[t_msg.command];
-            if type(fhandler) == "function" then
-                self:pcall(fhandler, self, t_msg, msg);
-            end
-		end
-	end
-end
-
-function ldb_mrg:msg_on_pong(t_msg, msg)
-
-end
-ldb_mrg:add_msg_handler("pong", ldb_mrg.msg_on_pong);
-
-function ldb_mrg:msg_on_continue(t_msg, msg)
-	l_debug:set_mode(l_debug.DEBUG_MODE_RUN);
-	l_dbg:Send(msg);
-end
-ldb_mrg:add_msg_handler("continue", ldb_mrg.msg_on_continue);
-
-function ldb_mrg:send_next_cach(tparam)
-	local info = self:get_msg_cach("next");
-	if not info then
-		return;
-	end
-	self:set_msg_cach("next", nil);
-	if tparam then
-		local t_msg = info.t_msg;
-		t_msg["point"] = {};
-		t_msg["point"].path = tparam.path;
-		t_msg["point"].line = tparam.line;
-		local msg = self:encode(t_msg);
-		if msg then
-			l_dbg:Send(msg);
-		end
-	else
-		l_dbg:Send(info.msg);
-	end
-end
-
-function ldb_mrg:send_step_in_cach(tparam)
-	local info = self:get_msg_cach("step_in");
-	if not info then
-		return;
-	end
-	self:set_msg_cach("step_in", nil);
-	if tparam then
-		local t_msg = info.t_msg;
-		t_msg["point"] = {};
-		t_msg["point"].path = tparam.path;
-		t_msg["point"].line = tparam.line;
-		local msg = self:encode(t_msg);
-		if msg then
-			l_dbg:Send(msg);
-		end
-	else
-		l_dbg:Send(info.msg);
-	end
-end
-
-function ldb_mrg:msg_on_next(t_msg, msg)
-	l_debug:set_mode(l_debug.DEBUG_MODE_NEXT);
-	local info = {};
-	info.t_msg = t_msg;
-	info.msg = msg;
-	self:set_msg_cach(t_msg.command, info);
-end
-ldb_mrg:add_msg_handler("next", ldb_mrg.msg_on_next);
-
-function ldb_mrg:msg_on_step_in(t_msg, msg)
-	l_debug:set_mode(l_debug.DEBUG_MODE_STEP_IN);
-	local info = {};
-	info.t_msg = t_msg;
-	info.msg = msg;
-	self:set_msg_cach(t_msg.command, info);
-end
-ldb_mrg:add_msg_handler("step_in", ldb_mrg.msg_on_step_in);
-
-function ldb_mrg:msg_on_stack(t_msg, msg)
-	t_msg["arguments"] = t_msg["arguments"] or {};
-	t_msg["arguments"]["body"] = self:get_stack_trace();
-	-- t_msg["body"] = l_debug:get_stack_info();
-	local s_msg = self:encode(t_msg);
-	if s_msg then
-		l_dbg:Send(s_msg);
-	end
-end
-ldb_mrg:add_msg_handler("stack", ldb_mrg.msg_on_stack);
-
-function ldb_mrg:msg_on_variables(t_msg, msg)
-	t_msg["arguments"] = t_msg["arguments"] or {};
-	t_msg["arguments"]["body"] = self:get_veriables();
-	local s_msg = self:encode(t_msg);
-	if type(s_msg) == "string" then
-		l_dbg:Send(s_msg);
-	end
-end
-ldb_mrg:add_msg_handler("variables", ldb_mrg.msg_on_variables);
-
-function ldb_mrg:msg_on_clearpoints(t_msg, msg)
-	local t_arg = t_msg["arguments"] or {};
-	local file_name = t_arg["path"];
-	local reset_count = t_arg["reset_count"] or 0;
-	if type(file_name) == "string" then
-		l_debug:clear_break_point(file_name, reset_count)
-	end
-end
-ldb_mrg:add_msg_handler("clearpoints", ldb_mrg.msg_on_clearpoints);
-
-function ldb_mrg:msg_on_setbreakpoints(t_msg, msg)
-	local file_name = t_msg["path"];
-	local lines = t_msg["lines"] or {};
-	if type(file_name) == "string" then
-		for _, line_no in pairs(lines) do 
-			self:add_break_point(file_name, line_no);
-		end
-	end
-end
-ldb_mrg:add_msg_handler("setbreakpoints", ldb_mrg.msg_on_setbreakpoints);
-
-function ldb_mrg:msg_on_evaluate(t_msg, msg)
-	local targuments = t_msg["arguments"] or {};
-	local targs = targuments["args"];
-	if targs then
-		if targs["context"] == "hover" then
-			local sveriable = targs["expression"];
-			local tbody = {};
-			tbody["result"] = sveriable..": hi world!";
-			tbody["type"] = "string";
-			tbody["variablesReference"] = 0;
-			targuments["body"] = tbody;
-			local s_msg = self:encode(t_msg);
-			if type(s_msg) == "string" then
-				l_dbg:Send(s_msg);
+	local t_list = l_socket:read_msg();
+	for _, info in ipairs(t_list) do
+		local request = info.t_msg;
+		local msg = info.msg;
+		if type(request.command) == "string" then
+			self.msg_handler_map = self.msg_handler_map or {};
+			local fhandler = self.msg_handler_map[request.command];
+			if type(fhandler) == "function" then
+				local response = l_socket:response_form_request(request);
+				l_utily:pcall(fhandler, self, request, request.arguments);
 			end
 		end
 	end
 end
-ldb_mrg:add_msg_handler("evaluate", ldb_mrg.msg_on_evaluate);
 
-function ldb_mrg:msg_on_detach(t_msg, msg)
-	l_dbg:Detach();
-end
-ldb_mrg:add_msg_handler("detach", ldb_mrg.msg_on_detach);
+function ldb_mrg:msg_on_initialize(request, args)
+	local response = l_socket:response_form_request(request);
+	self._clientLinesStartAt1 = args.linesStartAt1;
+	self._clientColumnsStartAt1 = args.columnsStartAt1;
+	response["body"] = response["body"] or {};
+	-- the adapter implements the configurationDoneRequest.
+	response["body"]["supportsConfigurationDoneRequest"] = false;
+	-- make VS Code to use 'evaluate' when hovering over source
+	response["body"]["supportsEvaluateForHovers"] = true;
+	-- make VS Code to show a 'step back' button
+	response["body"]["supportsStepBack"] = false;
+	l_socket:send_msg(response);
 
-function ldb_mrg:msg_on_detached(t_msg, msg)
-	l_debug:release();
+	local event = l_socket:create_event("initialized");
+	l_socket:send_msg(event);
 end
-ldb_mrg:add_msg_handler("detached", ldb_mrg.msg_on_detached);
+ldb_mrg:add_msg_handler("initialize", ldb_mrg.msg_on_initialize);
+
+function ldb_mrg:msg_on_attach(request, args)
+	local response = l_socket:response_form_request(request);
+	if args["workingPath"] then
+		workingPath = args["workingPath"];
+		workingPath = l_utily:win_style_path(workingPath);
+		if ssub(workingPath, -1, -1) ~= '\\' then
+			self.workingPath = workingPath..'\\';
+		end
+	end
+	l_socket:send_msg(response);
+end
+ldb_mrg:add_msg_handler("attach", ldb_mrg.msg_on_attach);
+
+function ldb_mrg:msg_on_disconnect(request, args)
+	local response = l_socket:response_form_request(request);
+	l_socket:send_msg(response);
+	if args.restart then
+		self:restart();
+	else
+		l_socket:disconnect();
+	end
+end
+ldb_mrg:add_msg_handler("disconnect", ldb_mrg.msg_on_disconnect);
+
+-- function ldb_mrg:msg_on_continue(t_msg, msg)
+	-- l_debug:set_mode(l_debug.DEBUG_MODE_RUN);
+	-- l_dbg:Send(msg);
+-- end
+-- ldb_mrg:add_msg_handler("continue", ldb_mrg.msg_on_continue);
+
+-- function ldb_mrg:send_next_cach(tparam)
+	-- local info = self:get_msg_cach("next");
+	-- if not info then
+		-- return;
+	-- end
+	-- self:set_msg_cach("next", nil);
+	-- if tparam then
+		-- local t_msg = info.t_msg;
+		-- t_msg["point"] = {};
+		-- t_msg["point"].path = tparam.path;
+		-- t_msg["point"].line = tparam.line;
+		-- local msg = l_utily:encode(t_msg);
+		-- if msg then
+			-- l_dbg:Send(msg);
+		-- end
+	-- else
+		-- l_dbg:Send(info.msg);
+	-- end
+-- end
+
+-- function ldb_mrg:send_step_in_cach(tparam)
+	-- local info = self:get_msg_cach("step_in");
+	-- if not info then
+		-- return;
+	-- end
+	-- self:set_msg_cach("step_in", nil);
+	-- if tparam then
+		-- local t_msg = info.t_msg;
+		-- t_msg["point"] = {};
+		-- t_msg["point"].path = tparam.path;
+		-- t_msg["point"].line = tparam.line;
+		-- local msg = l_utily:encode(t_msg);
+		-- if msg then
+			-- l_dbg:Send(msg);
+		-- end
+	-- else
+		-- l_dbg:Send(info.msg);
+	-- end
+-- end
+
+-- function ldb_mrg:msg_on_next(t_msg, msg)
+	-- l_debug:set_mode(l_debug.DEBUG_MODE_NEXT);
+	-- local info = {};
+	-- info.t_msg = t_msg;
+	-- info.msg = msg;
+	-- self:set_msg_cach(t_msg.command, info);
+-- end
+-- ldb_mrg:add_msg_handler("next", ldb_mrg.msg_on_next);
+
+-- function ldb_mrg:msg_on_step_in(t_msg, msg)
+	-- l_debug:set_mode(l_debug.DEBUG_MODE_STEP_IN);
+	-- local info = {};
+	-- info.t_msg = t_msg;
+	-- info.msg = msg;
+	-- self:set_msg_cach(t_msg.command, info);
+-- end
+-- ldb_mrg:add_msg_handler("step_in", ldb_mrg.msg_on_step_in);
+
+-- function ldb_mrg:msg_on_stack(t_msg, msg)
+	-- t_msg["arguments"] = t_msg["arguments"] or {};
+	-- t_msg["arguments"]["body"] = self:get_stack_trace();
+	-- -- t_msg["body"] = l_debug:get_stack_info();
+	-- local s_msg = l_utily:encode(t_msg);
+	-- if s_msg then
+		-- l_dbg:Send(s_msg);
+	-- end
+-- end
+-- ldb_mrg:add_msg_handler("stack", ldb_mrg.msg_on_stack);
+
+-- function ldb_mrg:msg_on_variables(t_msg, msg)
+	-- t_msg["arguments"] = t_msg["arguments"] or {};
+	-- t_msg["arguments"]["body"] = self:get_veriables();
+	-- local s_msg = l_utily:encode(t_msg);
+	-- if type(s_msg) == "string" then
+		-- l_dbg:Send(s_msg);
+	-- end
+-- end
+-- ldb_mrg:add_msg_handler("variables", ldb_mrg.msg_on_variables);
+
+-- function ldb_mrg:msg_on_clearpoints(t_msg, msg)
+	-- local t_arg = t_msg["arguments"] or {};
+	-- local file_name = t_arg["path"];
+	-- local reset_count = t_arg["reset_count"] or 0;
+	-- if type(file_name) == "string" then
+		-- l_debug:clear_break_point(file_name, reset_count)
+	-- end
+-- end
+-- ldb_mrg:add_msg_handler("clearpoints", ldb_mrg.msg_on_clearpoints);
+
+-- function ldb_mrg:msg_on_setbreakpoints(t_msg, msg)
+	-- local file_name = t_msg["path"];
+	-- local lines = t_msg["lines"] or {};
+	-- if type(file_name) == "string" then
+		-- for _, line_no in pairs(lines) do 
+			-- self:add_break_point(file_name, line_no);
+		-- end
+	-- end
+-- end
+-- ldb_mrg:add_msg_handler("setbreakpoints", ldb_mrg.msg_on_setbreakpoints);
+
+-- function ldb_mrg:msg_on_evaluate(t_msg, msg)
+	-- local targuments = t_msg["arguments"] or {};
+	-- local targs = targuments["args"];
+	-- if targs then
+		-- if targs["context"] == "hover" then
+			-- local sveriable = targs["expression"];
+			-- local tbody = {};
+			-- tbody["result"] = sveriable..": hi world!";
+			-- tbody["type"] = "string";
+			-- tbody["variablesReference"] = 0;
+			-- targuments["body"] = tbody;
+			-- local s_msg = l_utily:encode(t_msg);
+			-- if type(s_msg) == "string" then
+				-- l_dbg:Send(s_msg);
+			-- end
+		-- end
+	-- end
+-- end
+-- ldb_mrg:add_msg_handler("evaluate", ldb_mrg.msg_on_evaluate);
 
 return ldb_mrg;

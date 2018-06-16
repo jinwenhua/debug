@@ -219,13 +219,13 @@ void DebugServer::StartRecv()
 		return;
 
 	auto fThread = [this]() -> void {
-		nlohmann::json stjson;
-		stjson["command"] = "ping";
-		stjson["seq"] = 0;
-		stjson["type"] = "request";
-		std::string sping = stjson.dump();
-		std::string delim("&|&");
-		int nstep = 0;
+		//nlohmann::json stjson;
+		//stjson["command"] = "ping";
+		//stjson["seq"] = 0;
+		//stjson["type"] = "request";
+		//std::string sping = stjson.dump();
+		//std::string delim("&|&");
+		//int nstep = 0;
 		do
 		{
 			if (!(this->CheckRunState(DBG_RUN_STATE::DBG_ATTACH)))
@@ -241,31 +241,37 @@ void DebugServer::StartRecv()
 				this->_Recv(msg);
 				if (msg.length() > 0)
 				{
-					auto v_msg = s_split(msg, delim);
-					for (int i = 0; i < v_msg.size(); i++)
+					//auto v_msg = s_split(msg, delim);
+					//for (int i = 0; i < v_msg.size(); i++)
+					//{
+					//	// 有数据则链路是通的，恢复ping计数
+					//	this->m_nPing = 3;
+					//	std::lock_guard<std::mutex> lck(this->m_mtxRecv);
+					//	if (this->m_qRecv.size() < 100)
+					//	{
+					//		this->m_qRecv.push(v_msg[i]);
+					//		//printf("==> %s\n", v_msg[i].c_str());
+					//	}
+					//}
+
+					std::lock_guard<std::mutex> lck(this->m_mtxRecv);
+					if (this->m_qRecv.size() < 100)
 					{
-						// 有数据则链路是通的，恢复ping计数
-						this->m_nPing = 3;
-						std::lock_guard<std::mutex> lck(this->m_mtxRecv);
-						if (this->m_qRecv.size() < 100)
-						{
-							this->m_qRecv.push(v_msg[i]);
-							//printf("==> %s\n", v_msg[i].c_str());
-						}
+						this->m_qRecv.push(msg);
 					}
 				}
 			} while (msg.length() > 0);
 
-			if ( (++nstep % 50) == 0 )
-			{
-				
-				if (this->m_nPing-- < 0)
-				{
-					this->Detach();	// 失去链接
-				}
-				else
-					this->Send(sping);  // ping
-			}
+			//if ( (++nstep % 50) == 0 )
+			//{
+			//	
+			//	if (this->m_nPing-- < 0)
+			//	{
+			//		this->Detach();	// 失去链接
+			//	}
+			//	else
+			//		this->Send(sping);  // ping
+			//}
 
 			std::this_thread::sleep_for(std::chrono::milliseconds(100));
 			
@@ -391,14 +397,9 @@ int DebugServer::Detach()
         ::closesocket(m_nSocketClient);
         m_nSocketClient = INVALID_SOCKET;
         SetRunState(DBG_RUN_STATE::DBG_DETACH);
-		nlohmann::json stjson;
-		stjson["command"] = "detached";
-		stjson["seq"] = 0;
-		stjson["type"] = "request";
-		std::string sping = stjson.dump();
-		std::lock_guard<std::mutex> lck(m_mtxRecv);
-		m_qRecv.push(sping);
-		printf("debug> connection is broken.\n");
+		std::lock_guard<std::mutex> lck(this->m_mtxconsole);
+		this->m_qConsole.push("detached");
+		printf("debug> socket has been disconnected.\n");
         nRet = 1;
     }
 
