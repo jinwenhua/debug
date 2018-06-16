@@ -33,6 +33,15 @@ ldb_mrg = ldb_mrg or {};
 
 ldb_mrg.workingPath = ldb_mrg.workingPath or "e:\\github\\vscode-l-debug\\";
 
+ldb_mrg.FILER_FILE = 
+{
+	["json"] = 1,
+	["init"] = 1,
+	["ldbmrg"] = 1,
+	["protocol"] = 1,
+	["utilty"] = 1,
+};
+
 function ldb_mrg:on_tick(mode)
 	if not mode and l_debug.mode == l_debug.DEBUG_MODE_WAIT then
 		return;
@@ -55,8 +64,16 @@ function ldb_mrg:init(port, bconsole)
 	
 	local info = dgetinfo(1, "S");
 	local s_source = info["source"];
-	local _, _, file_name = sfind(s_source, ".*\\(.*)");
-	self.this_file_name = file_name;
+	local path = l_utily:win_style_path(s_source);
+	local _, _, dir = sfind(path, "(%w+)\\.*.lua");
+	self.this_file_dir = dir or '';
+	self.debug_filter_list = {};
+	for name, _ in pairs(self.FILER_FILE) do 
+		local filter_path = sformat("%s\\%s.lua", self.this_file_dir, name);
+		self.debug_filter_list[filter_path] = 1;
+	end
+
+	-- print(999, dir)
 	l_debug:init();
 	l_socket:init();
 end
@@ -98,6 +115,14 @@ end
 
 function ldb_mrg:set_break_points(path, lines)
 	return l_debug:set_break_points(path, lines);
+end
+
+function ldb_mrg:stop_on_breakpoint()
+	l_socket:stop_on_event("breakpoint")
+end
+
+function ldb_mrg:stop_on_step()
+	l_socket:stop_on_event("step")
 end
 
 function ldb_mrg:send_match_break_point(file_name, line_no)
@@ -175,14 +200,15 @@ function ldb_mrg:get_stack_trace()
 		if path and snum and sfunc then
 			local _, _, name = sfind(path, "(%w+.lua)");
 			name = name or path;
-			if self.this_file_name ~= name then
+			local filter_name = sformat("%s\\%s", self.this_file_dir, name);
+			if not self.debug_filter_list[filter_name] then
 				-- print(path, name, snum, sfunc);
 				path = slower(path);
 				local tsource = {};
 				tsource["path"] = self.workingPath..path;
 				tsource["name"] = name;
 				tsource["sourceReference"] = 0;
-				tsource["adapterData"] = "mock-adapter-data";
+				tsource["adapterData"] = "debug-server-data";
 				local info = {};
 				info["id"] = count;
 				info["source"] = tsource;
@@ -201,7 +227,7 @@ function ldb_mrg:get_stack_trace()
 	return tbody;
 end
 
-function ldb_mrg:_get_veriables(tget, tvariables)
+function ldb_mrg:_get_normal_veriables(tget, tvariables)
 	local count = 0;
 	for name, value in pairs(tvariables) do 
 		local tinfo = {};
@@ -213,7 +239,7 @@ function ldb_mrg:_get_veriables(tget, tvariables)
 		end
 		if tinfo["type"] then
 			count = count + 1;
-			tinfo["name"] = name;
+			tinfo["name"] = tostring(name);
 			tinfo["value"] = tostring(value);
 			tinfo["variablesReference"] = 0;
 			tget[count] = tinfo;
@@ -222,16 +248,98 @@ function ldb_mrg:_get_veriables(tget, tvariables)
 	return tget;
 end
 
-function ldb_mrg:get_veriables()
+function ldb_mrg:get_normal_veriables()
 	local tupvalues = l_debug:get_upvalue_info();
 	local tlocals = l_debug:get_local_info();
 	local tbody = {};
 	tbody["variables"] = {};
-	self:_get_veriables(tbody["variables"], tupvalues);
-	self:_get_veriables(tbody["variables"], tlocals);
+	self:_get_normal_veriables(tbody["variables"], tupvalues);
+	self:_get_normal_veriables(tbody["variables"], tlocals);
 	return tbody;
 end
 
+function ldb_mrg:_get_object_veriables(tget, tvariables)
+	self.var_ref_list = self.var_ref_list or {};
+	local index = #(self.var_ref_list);
+	local count = 0;
+	tget = tget or {};
+	for name, value in pairs(tvariables) do 
+		if type(value) == "table" then
+			count = count + 1;
+			index = index + 1;
+			local info = {};
+			info["name"] = tostring(name);
+			info["value"] = "table";
+			info["type"] = "object";
+			info["variablesReference"] = index;
+			tget[count] = info;
+
+			self.var_ref_list[index] = value;
+		end
+	end
+
+	return tget;
+end
+
+function ldb_mrg:get_object_veriables()
+	local tupvalues = l_debug:get_upvalue_info();
+	local tlocals = l_debug:get_local_info();
+	local tbody = {};
+	tbody["variables"] = {};
+	self:_get_object_veriables(tbody["variables"], tupvalues);
+	self:_get_object_veriables(tbody["variables"], tlocals);
+	return tbody;
+end
+
+function ldb_mrg:get_single_object(ref_id)
+	self.var_ref_list = self.var_ref_list or {};
+	local tvalue = self.var_ref_list[ref_id];
+	local index = #(self.var_ref_list);
+	local count = 0;
+	local body = {}
+	body.variables = {};
+	if type(tvalue) == "table" then
+		for name, value in pairs(tvalue) do 
+			local stype = type(value);
+			local info = {};
+			info["name"] = tostring(name);
+			if stype == "string" then
+				info["type"] = "string";
+				local nlen = strlen(value);
+				if nlen > 128 then
+					-- str to long.
+					value = ssub(1, 128);
+					value = value.."...";
+				end
+				info["value"] = value;
+				info["variablesReference"] = 0;
+			elseif stype == "number" then
+				info["type"] = "float";
+				info["value"] = tostring(value);
+				info["variablesReference"] = 0;
+			elseif stype == "table" then
+				index = index + 1;
+				info["value"] = "table";
+				info["type"] = "object";
+				info["variablesReference"] = index;
+				self.var_ref_list[index] = value;
+			else
+				info["type"] = "string";
+				info["value"] = tostring(value);
+				info["variablesReference"] = 0;
+			end
+
+			count = count + 1;
+			body.variables[count] = info;
+			if count > 20 then
+				-- to much veriables.
+				break;
+			end
+		end
+	end
+
+	return body;
+end
 --===================proccess client message========================================
 function ldb_mrg:add_io_handler(command, fhandler)
     self.io_handler_map = self.io_handler_map or {};
@@ -260,7 +368,7 @@ function ldb_mrg:proccess_io()
 end
 
 function ldb_mrg:io_on_dettach(sparam)
-    l_socket:disconnect()
+    l_socket:terminated();
 end
 ldb_mrg:add_io_handler("dettach", ldb_mrg.io_on_dettach);
 
@@ -290,21 +398,10 @@ function ldb_mrg:io_on_default(sline)
 	end
 end
 
-
 --===================proccess client message========================================
 function ldb_mrg:add_msg_handler(command, fhandler)
     self.msg_handler_map = self.msg_handler_map or {};
     self.msg_handler_map[command] = fhandler;
-end
-
-function ldb_mrg:set_msg_cach(command, info)
-	self.msg_cach_map = self.msg_cach_map or {};
-	self.msg_cach_map[command] = info;
-end
-
-function ldb_mrg:get_msg_cach(command)
-	self.msg_cach_map = self.msg_cach_map or {}
-	return self.msg_cach_map[command];
 end
 
 function ldb_mrg:proccess_msg()
@@ -373,6 +470,25 @@ function ldb_mrg:msg_on_setExceptionBreakpoints(request, args)
 end
 ldb_mrg:add_msg_handler("setExceptionBreakpoints", ldb_mrg.msg_on_setExceptionBreakpoints);
 
+function ldb_mrg:msg_on_configurationDone(request, args)
+	local response = l_socket:response_form_request(request);
+	l_socket:send_msg(response);
+end
+ldb_mrg:add_msg_handler("configurationDone", ldb_mrg.msg_on_configurationDone);
+
+function ldb_mrg:msg_on_threads(request, args)
+	local response = l_socket:response_form_request(request);
+	response.body = 
+	{
+		threads = 
+		{
+			{id = 1, name = "thread 1"},
+		},
+	}
+	l_socket:send_msg(response);
+end
+ldb_mrg:add_msg_handler("threads", ldb_mrg.msg_on_threads);
+
 function ldb_mrg:msg_on_setBreakpoints(request, args)
 	local path = l_utily:sub_working_path(args.source.path, self.workingPath);
 	local lines = args.lines or {};
@@ -396,130 +512,80 @@ function ldb_mrg:msg_on_setBreakpoints(request, args)
 end
 ldb_mrg:add_msg_handler("setBreakpoints", ldb_mrg.msg_on_setBreakpoints);
 
--- function ldb_mrg:msg_on_continue(t_msg, msg)
-	-- l_debug:set_mode(l_debug.DEBUG_MODE_RUN);
-	-- l_dbg:Send(msg);
--- end
--- ldb_mrg:add_msg_handler("continue", ldb_mrg.msg_on_continue);
+function ldb_mrg:msg_on_stackTrace(request, args)
+	local startFrame = args.startFrame or 0;
+	if startFrame == 0 then
+		local response = l_socket:response_form_request(request);
+		response.body = self:get_stack_trace();
+		l_socket:send_msg(response);
+	end
+end
+ldb_mrg:add_msg_handler("stackTrace", ldb_mrg.msg_on_stackTrace);
 
--- function ldb_mrg:send_next_cach(tparam)
-	-- local info = self:get_msg_cach("next");
-	-- if not info then
-		-- return;
-	-- end
-	-- self:set_msg_cach("next", nil);
-	-- if tparam then
-		-- local t_msg = info.t_msg;
-		-- t_msg["point"] = {};
-		-- t_msg["point"].path = tparam.path;
-		-- t_msg["point"].line = tparam.line;
-		-- local msg = l_utily:encode(t_msg);
-		-- if msg then
-			-- l_dbg:Send(msg);
-		-- end
-	-- else
-		-- l_dbg:Send(info.msg);
-	-- end
--- end
+function ldb_mrg:msg_on_next(request, args)
+	l_debug:set_mode(l_debug.DEBUG_MODE_NEXT);
+	local response = l_socket:response_form_request(request);
+	l_socket:send_msg(response);
+end
+ldb_mrg:add_msg_handler("next", ldb_mrg.msg_on_next);
 
--- function ldb_mrg:send_step_in_cach(tparam)
-	-- local info = self:get_msg_cach("step_in");
-	-- if not info then
-		-- return;
-	-- end
-	-- self:set_msg_cach("step_in", nil);
-	-- if tparam then
-		-- local t_msg = info.t_msg;
-		-- t_msg["point"] = {};
-		-- t_msg["point"].path = tparam.path;
-		-- t_msg["point"].line = tparam.line;
-		-- local msg = l_utily:encode(t_msg);
-		-- if msg then
-			-- l_dbg:Send(msg);
-		-- end
-	-- else
-		-- l_dbg:Send(info.msg);
-	-- end
--- end
+function ldb_mrg:msg_on_continue(request, args)
+	l_debug:set_mode(l_debug.DEBUG_MODE_RUN);
+	local response = l_socket:response_form_request(request);
+	l_socket:send_msg(response);
+end
+ldb_mrg:add_msg_handler("continue", ldb_mrg.msg_on_continue);
 
--- function ldb_mrg:msg_on_next(t_msg, msg)
-	-- l_debug:set_mode(l_debug.DEBUG_MODE_NEXT);
-	-- local info = {};
-	-- info.t_msg = t_msg;
-	-- info.msg = msg;
-	-- self:set_msg_cach(t_msg.command, info);
--- end
--- ldb_mrg:add_msg_handler("next", ldb_mrg.msg_on_next);
+function ldb_mrg:msg_on_stepIn(request, args)
+	l_debug:set_mode(l_debug.DEBUG_MODE_STEP_IN);
+	local response = l_socket:response_form_request(request);
+	l_socket:send_msg(response);
+end
+ldb_mrg:add_msg_handler("stepIn", ldb_mrg.msg_on_stepIn);
 
--- function ldb_mrg:msg_on_step_in(t_msg, msg)
-	-- l_debug:set_mode(l_debug.DEBUG_MODE_STEP_IN);
-	-- local info = {};
-	-- info.t_msg = t_msg;
-	-- info.msg = msg;
-	-- self:set_msg_cach(t_msg.command, info);
--- end
--- ldb_mrg:add_msg_handler("step_in", ldb_mrg.msg_on_step_in);
+function ldb_mrg:msg_on_scopes(request, args)
+	local response = l_socket:response_form_request(request);
+	local scopes = 
+	{
+		{name = "normal", variablesReference = 10000, expensive = false},
+		{name = "object", variablesReference = 10001, expensive = false},
+	};
+	response.body = {
+		scopes= scopes,
+	};
+	l_socket:send_msg(response);
+end
+ldb_mrg:add_msg_handler("scopes", ldb_mrg.msg_on_scopes);
 
--- function ldb_mrg:msg_on_stack(t_msg, msg)
-	-- t_msg["arguments"] = t_msg["arguments"] or {};
-	-- t_msg["arguments"]["body"] = self:get_stack_trace();
-	-- -- t_msg["body"] = l_debug:get_stack_info();
-	-- local s_msg = l_utily:encode(t_msg);
-	-- if s_msg then
-		-- l_dbg:Send(s_msg);
-	-- end
--- end
--- ldb_mrg:add_msg_handler("stack", ldb_mrg.msg_on_stack);
+function ldb_mrg:msg_on_variables(request, args)
+	local response = l_socket:response_form_request(request);
+	local ref_id = args.variablesReference;
+	if ref_id then
+		if ref_id == 10000 then
+			response.body = self:get_normal_veriables();
+		elseif ref_id == 10001 then
+			self.var_ref_list = {};
+			response.body = self:get_object_veriables();
+		elseif ref_id > 0 then
+			response.body = self:get_single_object(ref_id)
+		end
+	end
+	l_socket:send_msg(response);
+end
+ldb_mrg:add_msg_handler("variables", ldb_mrg.msg_on_variables);
 
--- function ldb_mrg:msg_on_variables(t_msg, msg)
-	-- t_msg["arguments"] = t_msg["arguments"] or {};
-	-- t_msg["arguments"]["body"] = self:get_veriables();
-	-- local s_msg = l_utily:encode(t_msg);
-	-- if type(s_msg) == "string" then
-		-- l_dbg:Send(s_msg);
-	-- end
--- end
--- ldb_mrg:add_msg_handler("variables", ldb_mrg.msg_on_variables);
-
--- function ldb_mrg:msg_on_clearpoints(t_msg, msg)
-	-- local t_arg = t_msg["arguments"] or {};
-	-- local file_name = t_arg["path"];
-	-- local reset_count = t_arg["reset_count"] or 0;
-	-- if type(file_name) == "string" then
-		-- l_debug:clear_break_point(file_name, reset_count)
-	-- end
--- end
--- ldb_mrg:add_msg_handler("clearpoints", ldb_mrg.msg_on_clearpoints);
-
--- function ldb_mrg:msg_on_setbreakpoints(t_msg, msg)
-	-- local file_name = t_msg["path"];
-	-- local lines = t_msg["lines"] or {};
-	-- if type(file_name) == "string" then
-		-- for _, line_no in pairs(lines) do 
-			-- self:add_break_point(file_name, line_no);
-		-- end
-	-- end
--- end
--- ldb_mrg:add_msg_handler("setbreakpoints", ldb_mrg.msg_on_setbreakpoints);
-
--- function ldb_mrg:msg_on_evaluate(t_msg, msg)
-	-- local targuments = t_msg["arguments"] or {};
-	-- local targs = targuments["args"];
-	-- if targs then
-		-- if targs["context"] == "hover" then
-			-- local sveriable = targs["expression"];
-			-- local tbody = {};
-			-- tbody["result"] = sveriable..": hi world!";
-			-- tbody["type"] = "string";
-			-- tbody["variablesReference"] = 0;
-			-- targuments["body"] = tbody;
-			-- local s_msg = l_utily:encode(t_msg);
-			-- if type(s_msg) == "string" then
-				-- l_dbg:Send(s_msg);
-			-- end
-		-- end
-	-- end
--- end
--- ldb_mrg:add_msg_handler("evaluate", ldb_mrg.msg_on_evaluate);
+function ldb_mrg:msg_on_evaluate(request, args)
+	local response = l_socket:response_form_request(request);
+	if args["context"] == "hover" then
+		local sveriable = args["expression"];
+		local body = {};
+		body["result"] = sveriable..": hi world!";
+		body["type"] = "string";
+		body["variablesReference"] = 0;
+		response["body"] = body;
+	end
+	l_socket:send_msg(response);
+end
+ldb_mrg:add_msg_handler("evaluate", ldb_mrg.msg_on_evaluate);
 
 return ldb_mrg;

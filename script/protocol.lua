@@ -13,6 +13,7 @@ function l_socket:read_msg()
     local t_list = {};
     local count = 0;
     if type(raw_msg) == "string" then
+        print("==========================================================")
         print("debug> recv:", raw_msg);
         local tmsg_list = l_utily:split_raw_msg(raw_msg);
         for _, msg in ipairs(tmsg_list) do 
@@ -37,6 +38,7 @@ function l_socket:send_msg(t_msg)
         if msg then
             self._sequence = _sequence;
             local nlen = strlen(msg);
+            print("==========================================================")
             local raw_msg = sformat("Content-Length: %s\r\n\r\n%s", nlen, msg);
             print("debug> send:", raw_msg);
             l_dbg:Send(raw_msg);
@@ -50,6 +52,16 @@ end
 
 function l_socket:terminated()
     local event = self:create_event("terminated");
+    self:send_msg(event);
+end
+
+function l_socket:stop_on_event(reason)
+    local event = self:create_event("stopped");
+    event.body = 
+    {
+        reason = reason,
+        threadId = 1,
+    }
     self:send_msg(event);
 end
 

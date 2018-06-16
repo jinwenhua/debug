@@ -25,7 +25,7 @@ function l_utily:split(src, delim)
 	local tlist = {};
 	local count = 0;
 	for line in sgmatch(src, "([^"..delim.."]+)") do
-		print(111, line)
+		-- print(111, line)
 		count = count + 1;
 		tlist[count] = line;
 	end

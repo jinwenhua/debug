@@ -379,63 +379,6 @@ function l_debug:update_statck_info(nlevel)
 	local count = 1;
 end
 
-function l_debug:updatestackinfo(nlevel)
-	nlevel = nlevel or 2;
-	nlevel = nlevel + 1;
-	local e = 1;
-	self.straceback = dtraceback("stack", nlevel);
-	local func = dgetinfo(nlevel, "f").func;
-	local index = 1;
-	self.tvariables = nil;
-	local name, val;
-	-- local count = 1;
-	-- repeat
-		-- name, val = dgetupvalue(func, count)
-		-- count = count + 1;
-		-- if name then
-			-- local stype = type(val);
-			-- local _type = "string"
-			-- if stype == "table" then
-				-- _type = "object";
-			-- elseif stype == "number" or stype == "string" then
-				-- _type = "float";
-				-- _val = tostring(val);--self:copy_no_loop(val);
-				-- self.tvariables = self.tvariables or {}
-				-- self.tvariables[index] = {name = name, value = _val, jstype = _type, luatype = "upvalue"};
-				-- index = index + 1;
-			-- elseif stype == "nil" then
-				-- val = "nil";
-			-- end
-		-- end
-	-- until not name
-	
-	local count = 1;
-	repeat
-		name, val = dgetlocal(nlevel, count)
-		count = count + 1;
-		if name then
-			local stype = type(val);
-			local _type = "string"
-			if stype == "table" then
-				_type = "object";
-			elseif stype == "number" then
-				_type = "float";
-				_val = tostring(val);--self:copy_no_loop(val);
-				self.tvariables = self.tvariables or {}
-				self.tvariables[index] = {name = name, value = _val, jstype = _type, luatype = "local"};
-				index = index + 1;
-			elseif stype == "string" then
-				_val = tostring(val);--self:copy_no_loop(val);
-				self.tvariables = self.tvariables or {}
-				self.tvariables[index] = {name = name, value = _val, jstype = _type, luatype = "local"};
-				index = index + 1;
-			elseif stype == "nil" then
-				val = "nil";
-			end
-		end
-	until not name
-end
-
 function l_debug.hook_c(scmd)
     local self = l_debug;
 	-- local cmd = self.CMD_2_HOOK[scmd];
@@ -513,16 +456,13 @@ function l_debug.hook_crl(scmd, line)
 		-- self:fwrite(sinfo);
 		-- wait for command
 		if b_line then
-			ldb_mrg:send_match_break_point(path, n_currentline);
+			ldb_mrg:stop_on_breakpoint();
+		else
+			ldb_mrg:stop_on_step();
 		end
 		self.step_in_deep = self.call_deep;
 		self.mode = self.DEBUG_MODE_WAIT;
 		self:update_statck_info(2);
-		local tparam = {};
-		tparam.path = path;
-		tparam.line = n_currentline;
-		ldb_mrg:send_next_cach(tparam);
-		ldb_mrg:send_step_in_cach(tparam);
 		while (self.mode == self.DEBUG_MODE_WAIT) do 
 			ldb_mrg:on_tick(self.DEBUG_MODE_WAIT);
 			ldb_mrg:sleep(100);
