@@ -9,6 +9,9 @@
 ]]
 l_utily = l_utily or {};
 
+-- make VS Code to use 'evaluate' when hovering over source
+l_utily.supportsHovers = true;
+
 local dgetinfo = debug.getinfo;
 local sfind = string.find;
 local ssub = string.sub;

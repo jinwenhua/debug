@@ -340,6 +340,38 @@ function ldb_mrg:get_single_object(ref_id)
 
 	return body;
 end
+
+function ldb_mrg:_get_veriable_by_name(tvariables, tlist)
+	local var = nil;
+	local nlen = #tlist;
+	for i = 1, nlen do 
+		local name = tlist[i];
+		var = var or tvariables;
+		var = var[name];
+		if i == nlen then
+			return var;
+		end
+		local stype = type(var);
+		if stype ~= "table" and stype ~= "userdata" then
+			return nil;
+		end
+	end
+	return var;
+end
+
+function ldb_mrg:get_veriable_by_name(expression)
+	if l_utily:check_key_word(expression) then
+		return "lua key word: "..expression;
+	end
+	
+	local expression = sgsub(expression, ':', '.');
+	local tlist = l_utily:split(expression, '.');
+	local tupvalues = l_debug:get_upvalue_info();
+	local tlocals = l_debug:get_local_info();
+
+	return self:_get_veriable_by_name(tlocals, tlist) or self:_get_veriable_by_name(tupvalues, tlist) or _G[expression];
+end
+
 --===================proccess client message========================================
 function ldb_mrg:add_io_handler(command, fhandler)
     self.io_handler_map = self.io_handler_map or {};
@@ -428,7 +460,7 @@ function ldb_mrg:msg_on_initialize(request, args)
 	-- the adapter implements the configurationDoneRequest.
 	response["body"]["supportsConfigurationDoneRequest"] = false;
 	-- make VS Code to use 'evaluate' when hovering over source
-	response["body"]["supportsEvaluateForHovers"] = true;
+	response["body"]["supportsEvaluateForHovers"] = l_utily.supportsHovers;
 	-- make VS Code to show a 'step back' button
 	response["body"]["supportsStepBack"] = false;
 	l_socket:send_msg(response);
@@ -548,7 +580,7 @@ function ldb_mrg:msg_on_scopes(request, args)
 	local scopes = 
 	{
 		{name = "normal", variablesReference = 10000, expensive = false},
-		{name = "object", variablesReference = 10001, expensive = false},
+		{name = "object", variablesReference = 10001, expensive = true},
 	};
 	response.body = {
 		scopes= scopes,
@@ -576,14 +608,46 @@ ldb_mrg:add_msg_handler("variables", ldb_mrg.msg_on_variables);
 
 function ldb_mrg:msg_on_evaluate(request, args)
 	local response = l_socket:response_form_request(request);
-	if args["context"] == "hover" then
-		local sveriable = args["expression"];
-		local body = {};
-		body["result"] = sveriable..": hi world!";
-		body["type"] = "string";
-		body["variablesReference"] = 0;
-		response["body"] = body;
+	-- 'watch': evaluate is run in a watch.
+	-- 'repl': evaluate is run from REPL console.
+	-- 'hover': evaluate is run from a data hover.
+	local context = args["context"]; -- 'hover'
+	if context == "hover" and not l_utily.supportsHovers then
+		return;
 	end
+	local expression = args["expression"];
+	local value = self:get_veriable_by_name(expression);
+	local stype = type(value);
+	local info = {};
+	if stype == "string" then
+		info["type"] = "string";
+		local nlen = strlen(value);
+		if nlen > 128 then
+			-- str to long.
+			value = ssub(1, 128);
+			value = value.."...";
+		end
+		info["result"] = value;
+		info["variablesReference"] = 0;
+	elseif stype == "number" then
+		info["type"] = "float";
+		info["result"] = tostring(value);
+		info["variablesReference"] = 0;
+	elseif stype == "table" then
+		self.var_ref_list = self.var_ref_list or {};
+		local index = #(self.var_ref_list);
+		index = index + 1;
+		info["result"] = "table";
+		info["type"] = "object";
+		info["variablesReference"] = index;
+		self.var_ref_list[index] = value;
+	else
+		info["type"] = "string";
+		info["result"] = tostring(value);
+		info["variablesReference"] = 0;
+	end
+
+	response["body"] = info;
 	l_socket:send_msg(response);
 end
 ldb_mrg:add_msg_handler("evaluate", ldb_mrg.msg_on_evaluate);

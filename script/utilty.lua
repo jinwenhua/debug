@@ -19,13 +19,23 @@ local fxpcall = xpcall;
 ldb_json = ldb_json or require("json");
 l_utily = l_utily or {};
 
+l_utily.luaX_tokens = {
+    ["and"] = 1, ["break"] = 1, ["do"] = 1, ["else"] = 1 , ["elseif"] = 1,
+    ["end"] = 1, ["false"] = 1, ["for"] = 1, ["function"] = 1, ["goto"] = 1, ["if"] = 1,
+    ["in"] = 1, ["local"] = 1, ["nil"] = 1, ["not"] = 1, ["or"] = 1, ["repeat"] = 1,
+    ["return"] = 1, ["then"] = 1, ["true"] = 1, ["until"] = 1, ["while"] = 1,
+    ["//"] = 1, [".."] = 1, ["..."] = 1, ["=="] = 1, [">="] = 1, ["<="] = 1, ["~="] = 1,
+    ["<<"] = 1, [">>"] = 1, ["::"] = 1, ["<eof>"] = 1,
+    ["<number>"] = 1, ["<integer>"] = 1, ["<name>"] = 1, ["<string>"] = 1
+};
+
 function l_utily:split(src, delim)
 	src = src or '';
 	delim = delim or '%s';
 	local tlist = {};
 	local count = 0;
 	for line in sgmatch(src, "([^"..delim.."]+)") do
-		-- print(111, line)
+		-- print(111, line);
 		count = count + 1;
 		tlist[count] = line;
 	end
@@ -93,7 +103,12 @@ function l_utily:pcall(func, ...)
     return fxpcall(func, errhander, ...);
 end
 
-
+function l_utily:check_key_word(expression)
+	if self.luaX_tokens[expression] then
+		return true;
+	end
+	return false;
+end
 
 
 
