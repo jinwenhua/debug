@@ -34,13 +34,13 @@ vs code lua 调试插件
 2. 打开调试配置 launch.json 文件。方法如下：
 
 3. 在点击添加配置，选择 lua attach。然后修改配置：
-```json
+```
 {
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "lua attach",  # 调试名称: 可以自定义
-            "type": "lua",         # 调试类型: lua 
+            "name": "lua attach",  // 调试名称: 可以自定义
+            "type": "lua",         // 调试类型: lua 
             "request": "attach",   // 调试方式: attach
             "stopOnEntry": false,  // 这里设置成 false
             "ip": "127.0.0.1",     // 本地调试
