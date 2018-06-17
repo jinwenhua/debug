@@ -1,6 +1,6 @@
 # vscode-l-debug
 ***
-vs code lua 调试插件   
+vs code lua 调试插件适配器   
 基于lua5.3 写的，其他的 lua5.x 应该也是支持可。   
 如果有问题需要改动的地方也不会很多。  
 这个是windows版本的，其他系统暂时不支持。    
@@ -34,7 +34,7 @@ vs code lua 调试插件
 2. 打开调试配置 launch.json 文件。方法如下：
 
 3. 在点击添加配置，选择 lua attach。然后修改配置：
-```json
+```
 {
     "version": "0.2.0",
     "configurations": [
