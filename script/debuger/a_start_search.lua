@@ -299,7 +299,7 @@ function Map:SurroundPoints(point)
 	
 	return surround_points;
 end
--- dofile("script\\a_start_search.lua")
+-- dofile("script\\debuger\\a_start_search.lua")
 -- a * 寻路算法的实现
 function Map:FindPath(start, des)
 	local point_list = {};

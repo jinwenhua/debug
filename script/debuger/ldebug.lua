@@ -317,8 +317,6 @@ function l_debug:test_break_point(path, line, start_line, end_line)
 		elseif type(start_line) == "number" and type(end_line) == "number" then
 			if start_line == 304 and g_count < 16 then
 				g_count = g_count + 1;
-				-- print(1111, path, line, start_line, end_line);
-				-- print(2222, l_debug.enable_count, debug.gethook())
 			end
 			for line_no, enable in pairs(info) do 
 				if line_no > start_line and line_no < end_line and enable == 1 then
@@ -449,7 +447,7 @@ function l_debug.hook_crl(scmd, line)
 	
 	-- if mode is next  or find a break then stop
 	if (b_func and self.mode == self.DEBUG_MODE_NEXT) or 
-		(self.step_in_deep > 0 and self.step_in_deep >= self.call_deep) or
+		(self.step_in_deep > 0 and self.step_in_deep >= self.call_deep and self.mode ~= self.DEBUG_MODE_RUN) or
 			b_line then
 		local sinfo = string.format("[%s|%s]%s:%s", s_what, cmd, s_source or "nil", n_currentline or "nil");
 		print("debug>", sinfo)
@@ -483,8 +481,6 @@ function l_debug.hook_cr(scmd)
         return;
 	end
 	
-	
-	-- print(9999, scmd, s_source, s_what, n_linedefined, self.call_deep)
 	if cmd == self.HOOK_CMD_CALL then
 		self.call_deep = self.call_deep + 1;
 		local path = self:get_real_path(s_source);
