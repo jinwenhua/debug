@@ -1,1 +1,1 @@
-.\lua.exe -E init.lua
+.\lua.exe init.lua

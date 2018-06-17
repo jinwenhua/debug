@@ -47,7 +47,16 @@ function l_utily:init()
 	
 		local port = 8869;
 		ldb_mrg:init(port, 0);
-		ldb_mrg:run()
+
+		--[[
+		/*
+		-- ldb_mrg:run() is for test 
+		-- In the real process, after l_utily:init()
+		-- you can call ldb_mrg:on_tick(l_debug.DEBUG_MODE_RUN) in your main loop
+		-- you can control the call frequency and I recommend 100 milliseconds per time
+		*/
+		]]
+		-- ldb_mrg:run();
 	end
 end
 

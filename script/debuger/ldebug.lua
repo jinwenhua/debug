@@ -449,7 +449,7 @@ function l_debug.hook_crl(scmd, line)
 	if (b_func and self.mode == self.DEBUG_MODE_NEXT) or 
 		(self.step_in_deep > 0 and self.step_in_deep >= self.call_deep and self.mode ~= self.DEBUG_MODE_RUN) or
 			b_line then
-		local sinfo = string.format("[%s|%s]%s:%s", s_what, cmd, s_source or "nil", n_currentline or "nil");
+		local sinfo = sformat("[%s|%s]%s:%s", s_what, cmd, s_source or "nil", n_currentline or "nil");
 		print("debug>", sinfo)
 		-- self:fwrite(sinfo);
 		-- wait for command

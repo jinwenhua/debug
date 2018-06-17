@@ -50,6 +50,16 @@ function ldb_mrg:on_tick(mode)
 	self:proccess_io();
 end
 
+function ldb_mrg:run()
+	self.isrunning = true;
+	l_dbg:StartConsole();
+	print("now debuger is running.")
+	while self.isrunning do 
+		self:on_tick();
+		self:sleep(100);
+	end
+end
+
 function ldb_mrg:init(port, bconsole)
 	print("ldb_mrg init.")
 	l_debug:set_io_fuc(nil, nil)
@@ -76,15 +86,6 @@ function ldb_mrg:init(port, bconsole)
 	-- print(999, dir)
 	l_debug:init();
 	l_socket:init();
-end
-
-function ldb_mrg:run()
-	self.isrunning = true;
-	l_dbg:StartConsole();
-	while self.isrunning do 
-		self:on_tick();
-		self:sleep(100);
-	end
 end
 
 function ldb_mrg:restart()
