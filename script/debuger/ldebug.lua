@@ -192,18 +192,18 @@ function l_debug:set_break_points(path, lines)
 
 	if self.enable_count > 0 and not dgethook() then
 		self:set_hook_c();
-	elseif self.enable_count < 1 then
+	elseif self.enable_count < 1 and self.mode == self.DEBUG_MODE_RUN then
 		self:unhook();
 	end
 
 	return break_points;
 end
 
-function l_debug:clear_break_point(path, reset_count)
+function l_debug:clear_break_point(path)
 	if type(path) ~= "string" then
 		return;
 	end
-	reset_count = reset_count or 0;
+
 	local info = self.map[path];
 	if not info then
 		return;
@@ -218,7 +218,7 @@ function l_debug:clear_break_point(path, reset_count)
 		self.count = self.count - 1;
 	end
 
-	if self.enable_count < 1 and reset_count == 0 and dgethook() then
+	if self.enable_count < 1 and self.mode == self.DEBUG_MODE_RUN and dgethook() then
 		self:unhook();
 	end
 end
@@ -438,7 +438,11 @@ function l_debug.hook_crl(scmd, line)
 
 	if not b_func and  self.mode == self.DEBUG_MODE_RUN then
 		if self.call_deep < 1 then
-			self:set_hook_c();
+			if self.enable_count > 0 then
+				self:set_hook_c();
+			else
+				self:unhook();
+			end
 		else
 			self:set_hook_cr();
 		end
@@ -447,7 +451,7 @@ function l_debug.hook_crl(scmd, line)
 	
 	-- if mode is next  or find a break then stop
 	if (b_func and self.mode == self.DEBUG_MODE_NEXT) or 
-		(self.step_in_deep > 0 and self.step_in_deep >= self.call_deep and self.mode ~= self.DEBUG_MODE_RUN) or
+		(self.step_in_deep >= 0 and self.step_in_deep >= self.call_deep and self.mode ~= self.DEBUG_MODE_RUN) or
 			b_line then
 		local sinfo = sformat("[%s|%s]%s:%s", s_what, cmd, s_source or "nil", n_currentline or "nil");
 		print("debug>", sinfo)
