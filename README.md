@@ -1,6 +1,6 @@
 # vscode-l-debug
 ***
-vs code lua 调试插件   
+vs code lua 调试适配器  
 基于lua5.3 写的，其他的 lua5.x 应该也是支持可。   
 如果有问题需要改动的地方也不会很多。  
 这个是windows版本的，其他系统暂时不支持。    
