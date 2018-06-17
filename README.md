@@ -39,8 +39,8 @@ vs code lua 调试插件
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "lua attach",  // 调试名称: 可以自定义
-            "type": "lua",         // 调试类型: lua 
+            "name": "lua attach",  # 调试名称: 可以自定义
+            "type": "lua",         # 调试类型: lua 
             "request": "attach",   // 调试方式: attach
             "stopOnEntry": false,  // 这里设置成 false
             "ip": "127.0.0.1",     // 本地调试
