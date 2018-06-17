@@ -1,6 +1,6 @@
 # vscode-l-debug
 ***
-vs code lua 调试适配器  
+vs code lua 调试插件适配器   
 基于lua5.3 写的，其他的 lua5.x 应该也是支持可。   
 如果有问题需要改动的地方也不会很多。  
 这个是windows版本的，其他系统暂时不支持。    
@@ -31,9 +31,12 @@ vs code lua 调试适配器
 ### vscode 配置
 1. 安装 Lua Debug 插件（其实也可以不用装，方便配置而已）。
 
-2. 打开调试配置 launch.json 文件。方法如下：
+2. 打开调试配置 launch.json 文件。方法如下：   
+![Aaron Swartz](https://github.com/lhswei/vscode-l-debug/blob/debug-server/res/launch_json.PNG)
 
-3. 在点击添加配置，选择 lua attach。然后修改配置：
+3. 在点击添加配置，选择 lua attach。然后修改配置：   
+![Aaron Swartz](https://github.com/lhswei/vscode-l-debug/blob/debug-server/res/launch_attach.PNG)
+
 ```
 {
     "version": "0.2.0",
@@ -60,8 +63,8 @@ vs code lua 调试适配器
 ### 进行调试
 1. 安装 “部署 debuger” 所说的配置。 启动客户端。
 
-2. 点击选择 “vscode 配置” 中的 “lua attach” 启动调试。
-
+2. 点击选择 “vscode 配置” 中的 “lua attach” 启动调试。   
+![Aaron Swartz](https://github.com/lhswei/vscode-l-debug/blob/debug-server/res/lua_attach.PNG)
 3. 如果链接上了 debugserver 技能正常下断点了。
 
 4. debugserver 是调试服务器，会建立 socket 监听 vscode 的链接请求。建立连接成功后，进可以进行调试通信了。
