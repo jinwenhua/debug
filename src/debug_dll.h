@@ -1,18 +1,19 @@
 #ifndef __DEBUG_DLL_H__
 #define __DEBUG_DLL_H__
 
+
 #if defined(LDEBUG_BUILD_AS_DLL)	/* { */
-
-#if defined(LDEBUG_CORE) || defined(LDEUBG_LIB)	/* { */
-#define LDEBUG_API __declspec(dllexport)
-#else						/* }{ */
-#define LDEBUG_API __declspec(dllimport)
-#endif						/* } */
-
+	#if defined (__GNUC__) && defined(__unix__)
+  		#define LDEBUG_API __attribute__ ((__visibility__("default")))
+	#elif defined (WIN32)
+		#if defined(LDEBUG_CORE) || defined(LDEUBG_LIB)	/* { */
+			#define LDEBUG_API __declspec(dllexport)
+		#else						/* }{ */
+			#define LDEBUG_API __declspec(dllimport)
+		#endif						/* } */
+	#endif
 #else				/* }{ */
-
-#define LDEBUG_API 	__declspec(dllimport)
-
+	#define LDEBUG_API 
 #endif				/* } */
 
 extern "C" {

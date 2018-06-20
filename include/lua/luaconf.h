@@ -47,11 +47,11 @@
 /*
 ** By default, Lua on Windows use (some) specific Windows features
 */
-#define LUA_USE_WINDOWS
+/* #undef LUA_USE_WINDOWS */
 
-#define LUA_DL_DLL 
-/* #undef LUA_USE_POSIX */
-/* #undef LUA_USE_DLOPEN */
+/* #undef LUA_DL_DLL */
+#define LUA_USE_POSIX
+#define LUA_USE_DLOPEN		/* needs an extra library: -ldl */
 /* #undef LUA_USE_READLINE */
 
 /*
@@ -149,20 +149,20 @@
 ** hierarchy or if you want to install your libraries in
 ** non-conventional directories.
 */
-#define LUA_MODULE_SUFFIX ".dll"
+#define LUA_MODULE_SUFFIX ".so"
 #define LUA_DIR	"!/../"
 /* #undef LUA_LDIR */
 /* #undef LUA_CDIR */
 
-#define LUA_PATH_DEFAULT ".\\?.lua;!\\..\\\\?.lua;!\\..\\\\?\\init.lua"
-#define LUA_CPATH_DEFAULT ".\\?.dll;!\\..\\\\?.dll;!\\..\\\\loadall.dll"
+#define LUA_PATH_DEFAULT "./?.lua;!/..//?.lua;!/..//?/init.lua"
+#define LUA_CPATH_DEFAULT "./?.so;!/..//?.so;!/..//loadall.so"
 
 /*
 @@ LUA_DIRSEP is the directory separator (for submodules).
 ** CHANGE it if your machine does not use "/" as the directory separator
 ** and is not Windows. (On Windows Lua automatically uses "\".)
 */
-#define LUA_DIRSEP	"\\"
+#define LUA_DIRSEP	"/"
 
 /* }================================================================== */
 

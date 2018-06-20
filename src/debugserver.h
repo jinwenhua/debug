@@ -10,9 +10,15 @@
 #include <chrono>
 #include <functional>
 #include <atomic>
+#ifdef WIN32
 #include <winsock2.h> 
 #include <windows.h>
-#include <synchapi.h>
+#else
+#include <netinet/in.h>       /*socket address struct*/  
+#include <arpa/inet.h>            /*host to network convertion*/  
+#include <sys/socket.h>  
+#include <sys/types.h>  
+#endif
 #include <string>
 #include <queue>
 #include "luawrapper.h"
@@ -21,7 +27,14 @@
 #include <fstream>  
 #include <stdexcept>      // std::logic_error
 
+#ifdef WIN32
 #pragma comment(lib, "WS2_32")
+#endif
+
+#ifndef INVALID_SOCKET
+#define INVALID_SOCKET -1
+#endif
+
 
 #define _TCP_MAX_CONN_WAIT          10
 #define _TCP_CHAR_IP_LEN            33

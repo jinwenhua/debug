@@ -1,5 +1,5 @@
 project(ldb)
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 2.8)
 #cmake -DCMAKE_BUILD_TYPE=Debug
 
 IF (WIN32)  
@@ -38,11 +38,31 @@ set(
 
 ## dll 
 add_library ( ldebugserver SHARED  ${LIBLDB_SRC})
-
+IF (WIN32)  
 target_compile_definitions(ldebugserver 
                             PRIVATE "LUA_USE_WINDOWS"
                             PRIVATE "LDEBUG_BUILD_AS_DLL"
                             PRIVATE "LDEUBG_LIB"
                             )
-target_link_libraries ( ldebugserver lua.lib )
+ELSEIF (APPLE)  
+target_compile_definitions(ldebugserver 
+							PRIVATE "LUA_USE_MACOSX"
+                            PRIVATE "LDEBUG_BUILD_AS_DLL"
+                            PRIVATE "LDEUBG_LIB"
+                            )
+ELSEIF (UNIX)  
+target_compile_definitions(ldebugserver 
+							PRIVATE "LUA_USE_LINUX"
+                            PRIVATE "LDEBUG_BUILD_AS_DLL"
+                            PRIVATE "LDEUBG_LIB"
+                            )
+ENDIF () 
+
+target_link_libraries ( ldebugserver ${lua_lib} )
+
+if (CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_compile_options(test PRIVATE "-std=c++11")
+    target_compile_options(ldebugserver PRIVATE "-std=c++11")
+    MESSAGE(STATUS "change complie to c++11")  
+endif()
 

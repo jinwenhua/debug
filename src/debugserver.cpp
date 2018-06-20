@@ -4,7 +4,10 @@ extern "C" {
     #include "lualib.h"
     #include "lauxlib.h"
 }
-
+#ifndef WIN32
+#include <sys/ioctl.h>
+#include <unistd.h>
+#endif
 #include "debugserver.h"
 #include "json.hpp"
 #include <vector>
@@ -39,7 +42,11 @@ void DebugServer::AcceptThread()
 
     if (m_nSocketClient > 0)
     {
+#ifdef WIN32
         ::closesocket(m_nSocketClient);
+#else 
+		close(m_nSocketClient);
+#endif
         m_nSocketClient = INVALID_SOCKET;
     }
 
@@ -50,8 +57,8 @@ void DebugServer::AcceptThread()
         {
             sockaddr_in sockaddrClient;
             int nRetCode = 0;
-            int nsin_size = sizeof(struct sockaddr_in);
-            int conn = ::accept(this->m_nSocketLisent, (struct sockaddr *)&sockaddrClient, &nsin_size);
+            socklen_t nsin_size = sizeof(struct sockaddr_in);
+            int conn = accept(this->m_nSocketLisent, (struct sockaddr *)&sockaddrClient, &nsin_size);
             if (conn >= 0)
             {
 				if (this->m_nSocketClient < 0)
@@ -60,7 +67,11 @@ void DebugServer::AcceptThread()
 					this->m_nPing = 30;
 					this->SetRunState(DBG_RUN_STATE::DBG_ATTACH);
 					unsigned long ul = 1;
+#ifdef WIN32
 					::ioctlsocket(this->m_nSocketClient, FIONBIO, &ul);
+#else
+					ioctl(this->m_nSocketClient, FIONBIO, &ul);
+#endif
 					printf("debug> attach success.\n");
 				}
 				else
@@ -68,7 +79,11 @@ void DebugServer::AcceptThread()
 					std::string msg("debug> connection already exist.\n");
 					::send(conn, msg.c_str(), msg.length(), 0);
 					std::this_thread::sleep_for(std::chrono::milliseconds(100));
-					::closesocket(conn);
+#ifdef WIN32
+		        ::closesocket(conn);
+#else 
+				close(conn);
+#endif
 					conn = INVALID_SOCKET;
 				}
             }
@@ -103,16 +118,30 @@ int DebugServer::UnInit()
 {
     if (m_nSocketClient > 0)
     {
+
+#ifdef WIN32
         ::closesocket(m_nSocketClient);
+#else 
+		close(m_nSocketClient);
+#endif
         m_nSocketClient = INVALID_SOCKET;
     }
 
     if (m_nSocketLisent > 0)
     {
+
+#ifdef WIN32
         ::closesocket(m_nSocketLisent);
+#else 
+		close(m_nSocketLisent);
+#endif
         m_nSocketLisent = INVALID_SOCKET;
+
+
+#ifdef WIN32
 		//终止 DLL 的使用  
 		::WSACleanup();
+#endif
     }
 
 	SetRunState(DBG_RUN_STATE::DBG_NONE);
@@ -151,7 +180,12 @@ void DebugServer::StopThread()
     {   
 		if (m_nSocketLisent > 0)
 		{
+
+#ifdef WIN32
 			::closesocket(m_nSocketLisent);
+#else
+			close(m_nSocketLisent);
+#endif
 			m_nSocketLisent = INVALID_SOCKET;
 		}
 		m_Thread.join();
@@ -364,9 +398,12 @@ int DebugServer::InitServer()
 
     if (!CheckRunState(DBG_RUN_STATE::DBG_NONE))
         return nRet;
+
+#ifdef WIN32
     //初始化 DLL  
 	WSADATA wsaData;
 	::WSAStartup(MAKEWORD(2, 2), &wsaData);
+#endif
 
     m_nSocketLisent = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (m_nSocketLisent >= 0)
@@ -393,7 +430,11 @@ int DebugServer::Detach()
     int nRet = 0;
     if (m_nSocketClient >= 0)
     {
+#ifdef WIN32
         ::closesocket(m_nSocketClient);
+#else
+		close(m_nSocketClient);
+#endif
         m_nSocketClient = INVALID_SOCKET;
         SetRunState(DBG_RUN_STATE::DBG_DETACH);
 		std::lock_guard<std::mutex> lck(this->m_mtxconsole);
