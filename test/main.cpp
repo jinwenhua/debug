@@ -3,7 +3,11 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <direct.h>  
+#ifdef WIN32
+#include <direct.h>
+#else
+#include<unistd.h>  
+#endif
 #include "luawrapper.h"
 #include "../src/debug_dll.h"
 
@@ -116,7 +120,7 @@ int pmain(lua_State* luaEnv)
 	}
 	else
 	{
-		sprintf(path, "%s\\test.lua", buffer);
+		sprintf(path, "%s/test.lua", buffer);
         path[254] = 0;
 		printf("file: %s\n", buffer);
 		free(buffer);

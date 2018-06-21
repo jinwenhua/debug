@@ -29,7 +29,7 @@ set(
 ## test
 add_executable(test ${SRC_LIST})
 # target_compile_definitions(test PRIVATE "LUA_BUILD_AS_DLL")
-target_link_libraries ( test lua.lib )
+target_link_libraries ( test ${lua_lib} pthread )
 
 set( 
     LIBLDB_SRC ./src/debugserver.cpp
@@ -58,8 +58,11 @@ target_compile_definitions(ldebugserver
                             )
 ENDIF () 
 
-target_link_libraries ( ldebugserver ${lua_lib} )
-
+target_link_libraries ( ldebugserver pthread )
+#target_link_libraries ( ldebugserver ${lua_lib} )
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ./script)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ./script)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ./script)
 if (CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     target_compile_options(test PRIVATE "-std=c++11")
     target_compile_options(ldebugserver PRIVATE "-std=c++11")

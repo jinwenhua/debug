@@ -69,11 +69,11 @@ function ldb_mrg:init(port, bconsole)
 	local info = dgetinfo(1, "S");
 	local s_source = info["source"];
 	local path = l_utily:win_style_path(s_source);
-	local _, _, dir = sfind(path, "(%w+)\\.*.lua");
+	local _, _, dir = sfind(path, "(%w+)/.*.lua");
 	self.this_file_dir = dir or '';
 	self.debug_filter_list = {};
 	for name, _ in pairs(self.FILER_FILE) do 
-		local filter_path = sformat("%s\\%s.lua", self.this_file_dir, name);
+		local filter_path = sformat("%s/%s.lua", self.this_file_dir, name);
 		self.debug_filter_list[filter_path] = 1;
 	end
 
@@ -195,7 +195,7 @@ function ldb_mrg:get_stack_trace()
 		if path and snum and sfunc then
 			local _, _, name = sfind(path, "(%w+.lua)");
 			name = name or path;
-			local filter_name = sformat("%s\\%s", self.this_file_dir, name);
+			local filter_name = sformat("%s/%s", self.this_file_dir, name);
 			if not self.debug_filter_list[filter_name] then
 				-- print(path, name, snum, sfunc);
 				path = slower(path);
@@ -470,8 +470,8 @@ function ldb_mrg:msg_on_attach(request, args)
 	if args["workingPath"] then
 		local workingPath = args["workingPath"];
 		workingPath = l_utily:win_style_path(workingPath);
-		if ssub(workingPath, -1, -1) ~= '\\' then
-			self.workingPath = workingPath..'\\';
+		if ssub(workingPath, -1, -1) ~= '/' then
+			self.workingPath = workingPath..'/';
 		else
 			self.workingPath = workingPath;
 		end

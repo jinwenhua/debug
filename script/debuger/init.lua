@@ -17,6 +17,7 @@ local sfind = string.find;
 local ssub = string.sub;
 local slower = string.lower;
 local sformat = string.format;
+local sgsub = string.gsub;
 
 function l_utily:get_working_path(nlevel)
     nlevel = nlevel or 0;
@@ -24,7 +25,8 @@ function l_utily:get_working_path(nlevel)
 	local info = dgetinfo(nlevel, "S");
 	local path = info.source or '';
 	path = ssub(path, 2, -1) -- delete "@"  
-    local _, _, path = sfind(path, "^(.*)\\") -- the last "/" befor 
+	path = sgsub(path, '\\', '/');
+    local _, _, path = sfind(path, "^(.*)/") -- the last "/" befor 
     path = slower(path or "");
 	return path;
 end
@@ -35,9 +37,9 @@ function l_utily:init()
 		local workingpath = l_utily:get_working_path(0);
 		print("debug> current cwd:", workingpath)
 		package.path = package.path or "";
-		package.path = sformat(".\\%s\\?.lua;%s", workingpath, package.path);
+		package.path = sformat("./%s/?.lua;%s", workingpath, package.path);
 		package.cpath = package.cpath or "";
-		package.cpath = sformat(".\\%s\\?.dll;%s", workingpath, package.cpath);
+		package.cpath = sformat("./%s/?.dll;./%s/?.so;%s", workingpath, workingpath, package.cpath);
 		ldb_json = ldb_json or require("json");
 		json = nil;
 		require("utilty");

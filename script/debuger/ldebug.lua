@@ -99,13 +99,13 @@ end
 
 function l_debug:set_workingPath(workingPath)
     workingPath = workingPath or "";
-    self.workingPath = sgsub(slower(workingPath), "/", "\\");
+    self.workingPath = sgsub(slower(workingPath), '\\', "/");
 end
 
 function l_debug:get_real_path(file_path)
 	local _, _, path = sfind(file_path, "(%w.*)");
 	file_path = path or "";
-	file_path = sgsub(file_path, '/', '\\');
+	file_path = sgsub(file_path, '\\', '/');
 	file_path = slower(file_path);
 	return file_path;
 end

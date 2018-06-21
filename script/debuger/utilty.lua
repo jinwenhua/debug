@@ -64,7 +64,7 @@ end
 function l_utily:win_style_path(file_path)
 	local _, _, path = sfind(file_path, "(%w.*)");
 	file_path = path or "";
-	file_path = sgsub(file_path, '/', '\\');
+	file_path = sgsub(file_path, '\\', '/');
 	file_path = slower(file_path);
 	return file_path;
 end

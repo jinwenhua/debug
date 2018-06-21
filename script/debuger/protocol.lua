@@ -13,8 +13,8 @@ function l_socket:read_msg()
     local t_list = {};
     local count = 0;
     if type(raw_msg) == "string" then
-        -- print("==========================================================")
-        -- print("debug> recv:", raw_msg);
+        print("==========================================================")
+        print("debug> recv:", raw_msg);
         local tmsg_list = l_utily:split_raw_msg(raw_msg);
         for _, msg in ipairs(tmsg_list) do 
             local t_msg = l_utily:decode(msg);
@@ -38,9 +38,9 @@ function l_socket:send_msg(t_msg)
         if msg then
             self._sequence = _sequence;
             local nlen = strlen(msg);
-            -- print("==========================================================")
+            print("==========================================================")
             local raw_msg = sformat("Content-Length: %s\r\n\r\n%s", nlen, msg);
-            -- print("debug> send:", raw_msg);
+            print("debug> send:", raw_msg);
             l_dbg:Send(raw_msg);
         end
     end
