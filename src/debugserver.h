@@ -29,6 +29,7 @@
 
 #ifdef WIN32
 #pragma comment(lib, "WS2_32")
+typedef int socklen_t;
 #endif
 
 #ifndef INVALID_SOCKET

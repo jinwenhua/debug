@@ -1,15 +1,4 @@
 
-#ifndef LDEBUG_BUILD_AS_DLL
-#define LDEBUG_BUILD_AS_DLL
-
-#ifndef LDEUBG_LIB
-#define LDEUBG_LIB
-#endif // !LDEUBG_LIB
-
-
-#endif // !LDEBUG_BUILD_AS_DLL
-
-
 #include "debug_dll.h"
 #include "debugserver.h"
 
