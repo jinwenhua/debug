@@ -23,4 +23,3 @@ cmake_build/
 luacmake_build.*
 build/
 mock/
-lua

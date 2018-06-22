@@ -1,1 +1,1 @@
-./lua init.lua
+./lua53 init.lua

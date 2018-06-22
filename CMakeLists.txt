@@ -58,14 +58,22 @@ target_compile_definitions(ldebugserver
                             )
 target_link_libraries ( ldebugserver ${lua_lib} )
 ELSEIF (APPLE)  
-target_link_libraries ( test ${lua_lib} pthread )
+target_link_libraries ( test ${lua_lib} dl pthread )
+target_compile_definitions(test 
+							PRIVATE "LUA_USE_MACOSX"
+                            PRIVATE "LDEBUG_BUILD_AS_DLL"
+                            )
 target_link_libraries ( ldebugserver pthread )
 target_compile_definitions(ldebugserver 
 							PRIVATE "LUA_USE_MACOSX"
                             PRIVATE "LDEBUG_BUILD_AS_DLL"
                             )
 ELSEIF (UNIX)  
-target_link_libraries ( test ${lua_lib} pthread )
+target_link_libraries ( test ${lua_lib} dl  pthread )
+target_compile_definitions(test 
+							PRIVATE "LUA_USE_LINUX"
+                            PRIVATE "LDEBUG_BUILD_AS_DLL"
+                            )
 target_link_libraries ( ldebugserver pthread )
 target_compile_definitions(ldebugserver 
 							PRIVATE "LUA_USE_LINUX"
