@@ -3,7 +3,9 @@
 vs code lua 调试插件适配器   
 基于lua5.3 写的，其他的 lua5.x 应该也是支持可。   
 如果有问题需要改动的地方也不会很多。  
-这个是windows版本的，其他系统暂时不支持。    
+支持windows 和 linux， 其他的没测试过。   
+不过linux生成的动态库名为libldebugserver.so ，需要改名为 ldebugserver.so。  
+linux的部署操作类似windows.   
 
 第一次写 vscode 的调试适配器，会有很多问题，欢迎指正。
 
