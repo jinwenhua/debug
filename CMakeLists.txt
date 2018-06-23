@@ -26,7 +26,7 @@ ELSEIF (UNIX)
 ENDIF () 
 
 
-link_directories("lib")
+#link_directories("lib")
     
 find_library(lua_lib lua ./lib NO_DEFAULT_PATH)
     
